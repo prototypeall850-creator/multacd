@@ -38,8 +38,22 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         cfg = load_config(args.config)
-    except SystemExit as e:
-        return int(e.code or 1)  # pesan setup/error sudah dicetak config.py
+    except SystemExit:
+        # Config belum ada → wizard (bukan error). Config rusak → tetap error.
+        from core.config import resolve_config_path
+
+        if resolve_config_path(args.config).is_file():
+            return 1  # pesan error sudah dicetak config.py
+        from tui.screens.setup_wizard import run_setup_wizard
+
+        saved = run_setup_wizard(resolve_config_path(args.config))
+        if saved is None:
+            print("Setup dibatalkan — sampai jumpa lagi. 👋")
+            return 1
+        try:
+            cfg = load_config(args.config)
+        except SystemExit as e:
+            return int(e.code or 1)
     except Exception as e:
         print(f"❌ Gagal load config: {e}", file=sys.stderr)
         return 1

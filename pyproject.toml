@@ -16,6 +16,7 @@ select = ["E", "F", "W", "I", "UP", "SIM", "PIE", "RUF", "EXE"]
 # BINDINGS/CSS adalah atribut class pola framework Textual, bukan bug.
 "tui/app.py" = ["RUF012"]
 "tui/screens/main_screen.py" = ["RUF012"]
+"tui/screens/setup_wizard.py" = ["RUF012"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
