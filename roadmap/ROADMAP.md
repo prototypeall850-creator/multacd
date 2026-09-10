@@ -10,7 +10,7 @@
 |---|---|---|
 | Phase 1 | Foundation | ✅ Selesai |
 | Phase 2 | Coding Agent | ✅ Selesai |
-| Phase 3 | Research Agent | 📋 Planned |
+| Phase 3 | Research Agent | ✅ Selesai |
 | Phase 4 | Personal Agent | 📋 Planned |
 | Phase 5 | Polish & Distribution | 📋 Planned |
 
@@ -71,41 +71,39 @@ Tools baru di Phase 2 (29 → 34):
 
 ---
 
-## Phase 3 — Research Agent 📋
+## Phase 3 — Research Agent ✅
 
 **Tujuan:** multacd bisa riset mendalam seperti Perplexity, multi-sumber, terstruktur.
 
 ```
 Deliverable:
-  [ ] Web search integration:
-        Brave Search API (rekomendasi utama, privacy-friendly)
-        SerpAPI sebagai fallback
-        Konfigurasi di config.yaml (pilih provider)
-  [ ] Web scraping:
-        httpx + BeautifulSoup untuk extract konten
-        Handle paywall & javascript-heavy sites (fallback graceful)
-        Respect robots.txt
-  [ ] Deep Research Mode:
-        Multi-step search (satu query → temukan → follow-up query)
-        Cross-reference antar sumber
-        Detect & flag informasi yang kontradiktif antar sumber
-        Auto-generate follow-up questions
-  [ ] Synthesis & Summary:
-        Summarize per sumber → gabungkan jadi satu narasi
-        Format output: bisa markdown, bullet, atau essay
-        Kutipan & sumber tercantum jelas
-        Export hasil ke file .md
-  [ ] Mode /research di TUI:
-        Panel khusus untuk tampilkan sumber yang ditemukan
-        Progress indicator (step 1/5: searching... step 2/5: reading...)
-        Preview sumber sebelum di-scrape
-  [ ] Web fetch yang sudah ada di Phase 1 → diperdalam
+  ✅ Web search integration:
+        5 provider BYOK (tavily, exa, brave, serpapi, duckduckgo)
+        1 interface — ganti provider = 2 baris config
+        ⏳ live Exa/Brave/SerpAPI/DDG → issue #5
+  ✅ Web scraping:
+        httpx + BeautifulSoup + markdownify, buang nav/ads/script
+        paywall → fallback snippet, error → failed (tidak crash)
+  ✅ Quick Research (ala Perplexity, ~30 detik)
+  ✅ Deep Research Mode:
+        multi-round (broad → followup dari gaps), berhenti dini/limit jujur
+        cross-reference + flag kontradiksi
+  ✅ Synthesis & Summary:
+        jawaban terstruktur berkutipan + laporan lengkap per seksi
+        export_research → .md + frontmatter
+  ✅ Mode /research di TUI:
+        Sources Panel (Ctrl+R): status per sumber, round, stats, export
+        klik sumber → preview di chat
+        ⏳ setup wizard search step → jatah fase DESIGN (issue #12)
+        ⏳ brief round di chat (hanya di panel) → issue #12
+  ✅ web_fetch Phase 1 tetap ada (web_scrape = versi pintar)
 
-Tools baru di Phase 3:
-  web_search       cari dengan Brave/SerpAPI, return top N hasil
-  web_scrape       extract konten bersih dari URL
-  deep_research    orkestrasi multi-step research
-  export_research  simpan hasil riset ke file .md
+Tools baru di Phase 3 (34 → 39):
+  web_search       cari via provider config (AUTO, tanpa konfirmasi)
+  web_scrape       extract konten bersih dari URL (ASK)
+  quick_research   orkestrasi riset cepat 1 round (ASK)
+  deep_research    orkestrasi multi-round + laporan (ASK)
+  export_research  simpan hasil riset ke file .md (ASK)
 ```
 
 **Estimasi kompleksitas:** Sedang-Tinggi — perlu API eksternal (Brave/Serp), multi-step orchestration lebih kompleks.

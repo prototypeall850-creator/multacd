@@ -4,6 +4,7 @@ Agentic TUI: **Coding Agent + Research Agent + Personal Agent** dalam satu termi
 Satu config BYOK (Bring Your Own Key) untuk 100+ LLM provider via LiteLLM.
 
 > Phase 1 (pondasi) — ✅ selesai. Phase 2 (Coding Agent) — ✅ selesai.
+> Phase 3 (Research Agent) — ✅ selesai.
 > Lihat `plan/` untuk detail per phase dan `roadmap/ROADMAP.md` untuk arah besar.
 
 ---
@@ -114,7 +115,8 @@ Slash command (ketik di input, tanpa panggil LLM):
 | Command | Fungsi |
 |---|---|
 | `/code` | Mode Coding Agent (default) |
-| `/research`, `/personal` | Placeholder Phase 3/4 |
+| `/research` | Mode Research Agent (quick/deep research + Ctrl+R panel) |
+| `/personal` | Placeholder Phase 4 |
 | `/clear` | Bersihkan history |
 | `/scan` | Scan ulang codebase |
 | `/model [nama]` | Lihat / ganti model |
@@ -165,5 +167,5 @@ Data personal (config, `memory.db`, skills) tersimpan di `~/.multacd/`
 
 - **Phase 1** — Foundation ✅ (config BYOK, ReAct loop, 29 tools, TUI)
 - **Phase 2** — Coding Agent ✅ (scan codebase, run/lint/test, smart git, 34 tools)
-- **Phase 3** — Research Agent (web search API, deep research ala Perplexity)
+- **Phase 3** — Research Agent ✅ (5 search provider BYOK, quick/deep research, sources panel, 39 tools)
 - **Phase 4** — Personal Agent (Telegram/WA gateway, scheduler, briefing harian)
