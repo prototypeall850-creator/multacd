@@ -66,6 +66,7 @@ class MainScreen(Screen):
         chat = self.query_one(ChatPanel)
         await chat.add_info(
             f"⚡ Selamat datang di multacd v{self.app.version} — model: {self.app.cfg.model}\n"
+            f"📁 {self.app.project_label}\n"
             "Ketik pesan lalu Enter untuk kirim · Shift+Enter untuk newline · Ctrl+C keluar.\n"
             "Tool baca & git langsung jalan; tulis/shell/web minta izin [Y/N/A] dulu.\n"
             "Ketik /help buat daftar command."
@@ -129,9 +130,12 @@ class MainScreen(Screen):
         bar = self.query_one(StatusBar)
         bar.set_status("waiting")
         try:
-            return await self.app.push_screen(ConfirmDialog(tool_name, params))
+            # wait_for_dismiss=True: await kembalikan nilai dismiss (yes/no/all),
+            # bukan None. Wajib dipanggil dari worker (kita di run_worker).
+            return await self.app.push_screen(ConfirmDialog(tool_name, params),
+                                              wait_for_dismiss=True)
         finally:
             bar.set_status("thinking")
 
     async def _ask_user(self, question: str) -> str:
-        return await self.app.push_screen(AskDialog(question))
+        return await self.app.push_screen(AskDialog(question), wait_for_dismiss=True)
