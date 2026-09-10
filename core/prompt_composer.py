@@ -1,9 +1,13 @@
 """Prompt composer — susun system prompt dari soul + context + mode + rules.
 
-Urutan komposisi final (lengkap di Phase 2 Step 7):
+Urutan komposisi (final):
     [1] soul → [2] project_ctx → [3] mode_prompt → [4] operational rules
 
-Step 1 ini: load_soul() + skeleton PromptComposer (project/mode diisi step berikutnya).
+Dipakai agent_loop sebagai system message pertama setiap sesi
+(lihat core/agent_loop.py). Update parsial:
+    ganti mode (/code) → update_mode() saja
+    re-scan (/scan)    → update_project_ctx() saja (via app.refresh_project_ctx)
+    ganti soul         → sesi berikutnya (soul di-load sekali saat startup)
 
 Test cepat:
     python -m core.prompt_composer
@@ -17,8 +21,8 @@ from pathlib import Path
 FALLBACK_SOUL = "Kamu multacd, coding agent di terminal. Jawab singkat dan padat."
 
 # Aturan teknis yang selalu berlaku (bagian [4]).
-# NOTE: duplikasi sementara dengan SYSTEM_PROMPT di core/agent_loop.py —
-# Step 7 menyatukan keduanya (agent_loop pakai composer, bukan hardcoded).
+# Single source of truth untuk aturan operasional — agent_loop memakai
+# compose() di bawah, bukan string sendiri.
 OPERATIONAL_RULES = (
     "Operational rules: gunakan tool yang tersedia untuk mengerjakan tugas; "
     "baca file dulu sebelum mengedit; "
@@ -58,12 +62,12 @@ def load_soul(config_path: Path | str | None = None,
 
 
 class PromptComposer:
-    """Skeleton — menampung bagian prompt; komposisi penuh di Step 7."""
+    """Susun system prompt: soul → project_ctx → mode_prompt → rules."""
 
     def __init__(self, soul: str = "") -> None:
         self.soul = soul or FALLBACK_SOUL
-        self.project_ctx = ""   # diisi Step 3 (codebase scan)
-        self.mode_prompt = ""   # diisi Step 2/7 (mode manager)
+        self.project_ctx = ""   # diisi startup scan (app.refresh_project_ctx)
+        self.mode_prompt = ""   # diisi mode manager (app._sync_mode_ui)
 
     def update_project_ctx(self, new_ctx: str) -> None:
         self.project_ctx = new_ctx
@@ -106,14 +110,17 @@ if __name__ == "__main__":
     assert load_soul(config_path=Path(empty) / "soul.md",
                      project_dir=empty) == FALLBACK_SOUL
 
-    # 4. Composer skeleton: urutan soul → rules
+    # 4. Komposisi penuh: soul → ctx → mode → rules, urut dan lengkap
     pc = PromptComposer(soul="S")
     prompt = pc.compose()
     assert prompt.index("S") < prompt.index("Operational rules"), prompt
     pc.update_project_ctx("CTX")
     pc.update_mode("MODE")
     prompt = pc.compose()
-    assert [prompt.index(x) for x in ("S", "CTX", "MODE", "Operational rules")] == sorted(
-        [prompt.index(x) for x in ("S", "CTX", "MODE", "Operational rules")])
+    idx = [prompt.index(x) for x in ("S", "CTX", "MODE", "Operational rules")]
+    assert idx == sorted(idx), prompt
+    for needle in ("gunakan tool yang tersedia", "baca file dulu",
+                   "Dibatalkan user", "tidak ada di daftar", "JSON mentah"):
+        assert needle in prompt, needle
 
-    print("✅ prompt_composer self-test OK (load_soul prioritas + skeleton)")
+    print("✅ prompt_composer self-test OK (load_soul prioritas + komposisi)")

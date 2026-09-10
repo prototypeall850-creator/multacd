@@ -14,6 +14,7 @@ class StatusBar(Static):
         self._mode = "coding"
         self._model = "?"
         self._status = "idle"
+        self._git = ""
 
     def set_model(self, model: str) -> None:
         short = model.split("/")[-1]
@@ -29,16 +30,35 @@ class StatusBar(Static):
         self._status = status
         self._refresh()
 
+    def set_git(self, summary: dict) -> None:
+        """Tampilkan branch + file berubah. Bukan repo → 'no git'."""
+        if not summary.get("is_repo"):
+            self._git = "📍 no git"
+        else:
+            parts = [f"📍 {summary.get('branch', '?')}"]
+            if summary.get("modified"):
+                parts.append(f"+{summary['modified']}")
+            if summary.get("untracked"):
+                parts.append(f"~{summary['untracked']}")
+            self._git = " ".join(parts)
+        self._refresh()
+
     def _refresh(self) -> None:
         dot_color = {"idle": "green", "thinking": "yellow", "waiting": "red"}.get(
             self._status, "green"
         )
+        mode_color = {"code": "green", "research": "blue", "personal": "magenta"}.get(
+            self._mode, "bold"
+        )
         t = Text()
         t.append("⚡ multacd", style="bold cyan")
         t.append("  ·  💻 ", style="dim")
-        t.append(self._mode, style="bold")
+        t.append(self._mode, style=mode_color)
         t.append("  ·  ", style="dim")
         t.append(self._model, style="magenta")
+        if self._git:
+            t.append("  ·  ", style="dim")
+            t.append(self._git, style="yellow")
         t.append("  ·  ", style="dim")
         t.append("● ", style=f"bold {dot_color}")
         t.append(self._status, style=dot_color)

@@ -53,6 +53,7 @@ GIT_TOOLS = frozenset({
     "git_push",
     "git_pull",
     "git_checkout",
+    "git_merge",
 })
 
 # ── Filesystem WRITE (bisa merusak/mengubah file) ──

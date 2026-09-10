@@ -62,6 +62,8 @@ from tools.git.git_diff import SCHEMA as GIT_DIFF_SCHEMA
 from tools.git.git_diff import git_diff
 from tools.git.git_log import SCHEMA as GIT_LOG_SCHEMA
 from tools.git.git_log import git_log
+from tools.git.git_merge import SCHEMA as GIT_MERGE_SCHEMA
+from tools.git.git_merge import git_merge
 from tools.git.git_pull import SCHEMA as GIT_PULL_SCHEMA
 from tools.git.git_pull import git_pull
 from tools.git.git_push import SCHEMA as GIT_PUSH_SCHEMA
@@ -108,6 +110,7 @@ TOOL_REGISTRY: dict[str, tuple[ToolFunc, dict[str, Any]]] = {
     "git_push": (git_push, GIT_PUSH_SCHEMA),
     "git_pull": (git_pull, GIT_PULL_SCHEMA),
     "git_checkout": (git_checkout, GIT_CHECKOUT_SCHEMA),
+    "git_merge": (git_merge, GIT_MERGE_SCHEMA),
     # memory
     "remember": (remember, REMEMBER_SCHEMA),
     "recall": (recall, RECALL_SCHEMA),
@@ -167,7 +170,7 @@ if __name__ == "__main__":
     os.environ["MULTACD_HOME"] = tmp_home
 
     defs = get_tool_definitions()
-    assert len(defs) == len(KNOWN_TOOLS) == 33, len(defs)
+    assert len(defs) == len(KNOWN_TOOLS) == 34, len(defs)
     for d in defs:
         assert d["type"] == "function" and d["function"]["name"], d
 

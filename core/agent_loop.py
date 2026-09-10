@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.mode_manager import ModeManager
+    from core.prompt_composer import PromptComposer
 
 SYSTEM_PROMPT = (
     "Kamu multacd, coding agent di terminal. Jawab dengan bahasa yang dipakai user "
@@ -43,6 +44,8 @@ SYSTEM_PROMPT = (
     "Kalau hasil tool berisi 'Dibatalkan user', hormati itu: cari cara lain atau tanya user. "
     "Jangan panggil tool yang tidak ada di daftar. Jangan cetak JSON mentah ke user."
 )
+# Fallback kalau run_agent dipanggil tanpa composer (stdin/test).
+# Jalur resmi TUI selalu oper composer (lihat tui/app.py + main_screen.py).
 
 # confirm: "yes" | "no" | "all" (all = izinkan semua sesi ini)
 ConfirmCallback = Callable[[str, dict[str, Any]], Awaitable[str]]
@@ -111,14 +114,19 @@ async def run_agent(
     confirm: ConfirmCallback | None = None,
     ask_user: AskCallback | None = None,
     mode_manager: ModeManager | None = None,
+    active_tools: list[str] | None = None,
+    composer: PromptComposer | None = None,
 ) -> AsyncIterator[AgentEvent]:
     """Jalankan satu turn agent. Yield AgentEvent secara real-time."""
+    def _system_prompt() -> str:
+        return composer.compose() if composer is not None else SYSTEM_PROMPT
+
     # ── Slash command: intercept sebelum LLM, tidak masuk history ──
     if mode_manager is not None and mode_manager.is_command(user_input):
         result = mode_manager.handle_command(user_input)
         if result.action == "clear":
             context.clear()
-            context.add_message("system", SYSTEM_PROMPT)
+            context.add_message("system", _system_prompt())
         yield AgentText(result.message)
         yield AgentDone(result.message)
         return
@@ -127,10 +135,13 @@ async def run_agent(
     checker = PermissionChecker(config)
     confirm_cb = confirm or _stdin_confirm
     ask_cb = ask_user or _stdin_ask
-    tools = get_tool_definitions()
+    defs = get_tool_definitions()
+    # Bukan git repo → tool git disembunyikan dari LLM (lihat ModeManager).
+    tools = defs if active_tools is None else [
+        d for d in defs if d["function"]["name"] in set(active_tools)]
 
     if not context.get_messages():
-        context.add_message("system", SYSTEM_PROMPT)
+        context.add_message("system", _system_prompt())
     context.add_message("user", user_input)
 
     iteration = 0
@@ -340,7 +351,42 @@ if __name__ == "__main__":
                                         llm_client=fake2, mode_manager=mm))
         assert isinstance(events[-1], AgentDone) and "ok" in events[-1].text
 
-        print("✅ agent_loop self-test OK (8 skenario)")
+        # 9. active_tools memfilter definisi tool yang dilihat LLM
+        seen_tools: list = []
+
+        class RecLLM(FakeLLM):
+            async def stream_completion(self, messages, tools=None):
+                seen_tools.extend(t["function"]["name"] for t in (tools or []))
+                async for e in super().stream_completion(messages, tools):
+                    yield e
+
+        fake3 = RecLLM([StreamDone("ok", [])])
+        ctx = ConversationContext()
+        await _drain(run_agent("hi", ctx, cfg_cmd, llm_client=fake3,
+                               active_tools=["list_dir", "bash"]))
+        assert seen_tools == ["list_dir", "bash"], seen_tools
+
+        # 10. Composer → system message tersusun soul → ctx → mode → rules
+        from core.prompt_composer import PromptComposer as _PC
+        pc = _PC(soul="SOULKU")
+        pc.update_project_ctx("CTXKU")
+        pc.update_mode("MODEKU")
+        fake4 = FakeLLM([StreamDone("ok", [])])
+        ctx = ConversationContext()
+        await _drain(run_agent("hi", ctx, cfg_cmd, llm_client=fake4, composer=pc))
+        sys_msg = ctx.get_messages()[0]
+        assert sys_msg["role"] == "system", sys_msg
+        idx = [sys_msg["content"].index(x)
+               for x in ("SOULKU", "CTXKU", "MODEKU", "Operational rules")]
+        assert idx == sorted(idx), sys_msg["content"][:200]
+        # /clear isi ulang dengan prompt tersusun, bukan hardcoded
+        mm2 = _MM(config=cfg_cmd)
+        await _drain(run_agent("/clear", ctx, cfg_cmd, llm_client=FakeLLM([]),
+                               mode_manager=mm2, composer=pc))
+        assert ctx.get_messages()[0]["content"].startswith("SOULKU"), \
+            ctx.get_messages()[0]["content"][:100]
+
+        print("✅ agent_loop self-test OK (10 skenario)")
 
     async def _no_confirm(name, params):
         raise AssertionError(f"tidak boleh minta konfirmasi untuk {name}")

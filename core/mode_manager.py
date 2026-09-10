@@ -45,7 +45,15 @@ MODE_PROMPTS = {
         "Kamu sedang dalam Coding Agent mode. "
         "Kamu punya akses ke: filesystem, shell, git, "
         "run_python, lint_python, run_tests. "
-        "Fokus membantu user dengan kode dan development workflow."
+        "Fokus membantu user dengan kode dan development workflow. "
+        "Smart commit flow: user minta commit → jalankan git_status + git_diff dulu, "
+        "tulis pesan conventional commits (feat/fix/refactor/docs/chore), "
+        "lalu git_add + git_commit (dialog konfirmasi = persetujuan user). "
+        "Jangan push ke branch main/master/production/prod/release/stable "
+        "tanpa izin eksplisit — kalau tool menolak, tawarkan ke user: "
+        "tetap push, buat branch baru, atau batal. "
+        "Kalau merge conflict: analisis ours-vs-theirs, suggest resolusi, "
+        "apply via edit_file + git_add hanya setelah user setuju."
     ),
     MODE_RESEARCH: (
         "Kamu sedang dalam Research Agent mode. "
@@ -86,6 +94,11 @@ class ModeManager:
         self._config = config
         self._soul = soul
         self._rescan_fn = rescan_fn
+        self._git_enabled = True
+
+    def set_git_enabled(self, enabled: bool) -> None:
+        """Matikan kalau folder bukan git repo → tool git disembunyikan."""
+        self._git_enabled = enabled
 
     def get_mode(self) -> str:
         return self._mode
@@ -103,12 +116,11 @@ class ModeManager:
         return MODE_PROMPTS[self._mode]
 
     def get_active_tools(self) -> list[str] | None:
-        """Return None = semua tool aktif (code mode, Phase 2).
-
-        research/personal belum bisa diaktifkan (placeholder),
-        jadi cabang itu disiapkan untuk Phase 3/4.
-        """
-        return None
+        """None = semua tool aktif. Bukan git repo → list tanpa tool git."""
+        if self._git_enabled:
+            return None
+        from core.permissions import GIT_TOOLS, KNOWN_TOOLS
+        return sorted(KNOWN_TOOLS - GIT_TOOLS)
 
     @staticmethod
     def is_command(text: str) -> bool:
@@ -163,7 +175,14 @@ if __name__ == "__main__":
     # 1. Default mode code + prompt-nya
     assert mm.get_mode() == "code"
     assert "Coding Agent" in mm.get_mode_prompt()
+    assert "conventional" in mm.get_mode_prompt()  # smart commit flow
     assert mm.get_active_tools() is None  # semua tool aktif
+    mm.set_git_enabled(False)
+    active = mm.get_active_tools()
+    assert active is not None and not any(t.startswith("git_") for t in active), active
+    assert "read_file" in active and "bash" in active
+    mm.set_git_enabled(True)
+    assert mm.get_active_tools() is None
 
     # 2. Bukan command → teruskan ke LLM
     r = mm.handle_command("halo, apa kabar?")

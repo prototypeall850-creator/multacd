@@ -5,9 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from textual.app import App
+from textual.binding import Binding
 
 from core.config import Config
-from core.codebase import project_label, scan_project
+from core.codebase import get_git_summary, project_label, scan_project
 from core.llm_client import LLMClient
 from core.mode_manager import ModeManager
 from core.prompt_composer import PromptComposer, load_soul
@@ -22,8 +23,9 @@ class MultacdApp(App[None]):
     """App TUI. `config` wajib valid; `llm_client` opsional (buat test)."""
 
     BINDINGS = [
-        ("ctrl+c", "safe_quit", "Quit"),
-        ("ctrl+q", "safe_quit", "Quit"),
+        # priority=True: menang atas binding widget fokus (mis. Ctrl+C = copy di Input).
+        Binding("ctrl+c", "safe_quit", "Quit", priority=True),
+        Binding("ctrl+q", "safe_quit", "Quit", priority=True),
     ]
 
     def __init__(self, config: Config, llm_client: LLMClient | None = None,
@@ -40,9 +42,13 @@ class MultacdApp(App[None]):
         self.composer = PromptComposer(soul=soul)
         self.project_ctx = ""
         self.project_label = "?"
+        self.workdir = Path.cwd()  # project yang dibuka sesi ini
         self.refresh_project_ctx()  # startup scan (fallback aman di dalam)
+        # Auto git_status saat startup (silent, tanpa konfirmasi).
+        self.git_summary: dict = get_git_summary(self.workdir)
         self.mode_manager = ModeManager(config, soul=soul,
                                         rescan_fn=self.refresh_project_ctx)
+        self.mode_manager.set_git_enabled(bool(self.git_summary.get("is_repo")))
         self.composer.update_mode(self.mode_manager.get_mode_prompt())
 
     def refresh_project_ctx(self, root: Path | str | None = None) -> str:
