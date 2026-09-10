@@ -9,6 +9,8 @@ from rich.panel import Panel
 from textual.containers import VerticalScroll
 from textual.widgets import Markdown, Static
 
+from tui.widgets.tool_activity import ToolActivity
+
 
 class ChatPanel(VerticalScroll):
     """Kontainer vertikal; tiap pesan di-mount sebagai widget sendiri."""
@@ -26,7 +28,7 @@ class ChatPanel(VerticalScroll):
         super().__init__(id="chat-panel")
         self._assistant_md: Markdown | None = None
         self._assistant_text = ""
-        self._tool_rows: dict[str, Static] = {}
+        self._tool_rows: dict[str, ToolActivity] = {}
 
     async def add_user(self, text: str) -> None:
         await self.mount(Static(Panel(text, title="You", border_style="blue")))
@@ -55,21 +57,18 @@ class ChatPanel(VerticalScroll):
         self.scroll_end(animate=False)
 
     async def add_tool_row(self, call_id: str, name: str, params: dict[str, Any]) -> None:
-        target = params.get("path") or params.get("command") or params.get("url") or ""
-        target = str(target)
-        if len(target) > 60:
-            target = "…" + target[-59:]
-        row = Static(f"🔧 [bold]{name}[/bold] · {target} ··· ⏳", id=f"tool-{call_id}")
+        row = ToolActivity(call_id, name, params)
         self._tool_rows[call_id] = row
         await self.mount(row)
         self.scroll_end(animate=False)
 
-    async def update_tool_row(self, call_id: str, name: str, success: bool) -> None:
-        row = self._tool_rows.pop(call_id, None)
+    async def update_tool_row(self, call_id: str, name: str, success: bool,
+                              result: dict[str, Any] | None = None) -> None:
+        _ = name
+        row = self._tool_rows.get(call_id)
         if row is None:
             return
-        mark = "✅" if success else "❌"
-        row.update(f"🔧 [bold]{name}[/bold] ····· {mark}")
+        row.set_done(success, result)
 
     async def clear(self) -> None:
         """Kosongkan semua bubble (dipakai /clear) + reset state streaming."""

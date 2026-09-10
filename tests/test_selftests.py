@@ -51,6 +51,7 @@ SELF_TEST_MODULES = [
     "tui.themes",
     "tui.widgets.thinking_bar",
     "tui.widgets.permission_bar",
+    "tui.widgets.tool_activity",
     "search_providers.base",
     "search_providers.tavily",
     "search_providers.exa",

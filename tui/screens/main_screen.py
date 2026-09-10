@@ -268,7 +268,8 @@ class MainScreen(Screen):
                     await chat.add_tool_row(event.call_id, event.name, event.params)
                 elif isinstance(event, AgentToolDone):
                     think.show("thinking")
-                    await chat.update_tool_row(event.call_id, event.name, event.success)
+                    await chat.update_tool_row(event.call_id, event.name,
+                                               event.success, event.result)
                 elif isinstance(event, AgentDone):
                     pass  # teks sudah ter-stream penuh
                 elif isinstance(event, AgentError):

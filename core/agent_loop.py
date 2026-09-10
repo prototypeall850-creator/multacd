@@ -68,6 +68,7 @@ class AgentToolDone:
     call_id: str
     name: str
     success: bool
+    result: dict[str, Any] | None = None  # payload penuh (D4: expandable view)
 
 
 @dataclass
@@ -181,16 +182,17 @@ async def run_agent(
             if call.name == "ask":
                 question = call.arguments.get("question", "...")
                 answer = await ask_cb(str(question))
-                context.add_tool_result(call.id, "ask",
-                                        {"success": True, "result": answer, "error": None})
-                yield AgentToolDone(call.id, "ask", True)
+                ask_result = {"success": True, "result": answer, "error": None}
+                context.add_tool_result(call.id, "ask", ask_result)
+                yield AgentToolDone(call.id, "ask", True, ask_result)
                 continue
 
             decision = checker.check(call.name, call.arguments)
             if decision == "deny":
-                context.add_tool_result(call.id, call.name, fail(
-                    f"Tool `{call.name}` tidak tersedia. Pakai tool dari daftar yang ada."))
-                yield AgentToolDone(call.id, call.name, False)
+                deny_result = fail(
+                    f"Tool `{call.name}` tidak tersedia. Pakai tool dari daftar yang ada.")
+                context.add_tool_result(call.id, call.name, deny_result)
+                yield AgentToolDone(call.id, call.name, False, deny_result)
                 continue
 
             if decision == "ask":
@@ -199,15 +201,16 @@ async def run_agent(
                     checker.approve_all_for_session(call.name)
                     choice = "yes"
                 if choice != "yes":
-                    context.add_tool_result(call.id, call.name, fail(
+                    cancel_result = fail(
                         f"Dibatalkan user — jangan coba {call.name} yang sama lagi, "
-                        "cari cara lain atau tanya user."))
-                    yield AgentToolDone(call.id, call.name, False)
+                        "cari cara lain atau tanya user.")
+                    context.add_tool_result(call.id, call.name, cancel_result)
+                    yield AgentToolDone(call.id, call.name, False, cancel_result)
                     continue
 
             result = execute_tool(call.name, call.arguments)
             context.add_tool_result(call.id, call.name, result)
-            yield AgentToolDone(call.id, call.name, result["success"])
+            yield AgentToolDone(call.id, call.name, result["success"], result)
 
 
 if __name__ == "__main__":
