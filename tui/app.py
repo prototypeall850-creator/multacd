@@ -9,7 +9,7 @@ from textual.app import App
 from textual.binding import Binding
 
 from core.codebase import get_git_summary, project_label, scan_project
-from core.config import Config
+from core.config import Config, set_active_config
 from core.llm_client import LLMClient
 from core.mode_manager import ModeManager
 from core.prompt_composer import PromptComposer, load_soul
@@ -42,6 +42,11 @@ class MultacdApp(App[None]):
         icons.setup(config.icon_style)
         self.llm_client = llm_client
         self.context = ConversationContext()
+        # Pasang config sesi sebagai active config (Bug 3): tool research
+        # (quick/deep_research, web_search, query_generator) membaca dari
+        # sini — `--config PATH` dan `/model X` jadi dihormati. Referensi
+        # objek yang sama dengan self.cfg, jadi mutasi /model ikut terlihat.
+        set_active_config(self.cfg)
         self.version = version
         self.main_screen: MainScreen | None = None
         self._quit_armed = False

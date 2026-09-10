@@ -49,11 +49,13 @@ def deep_research(topic: str, max_rounds: int = 5,
     except (TypeError, ValueError):
         return fail("max_rounds harus angka 1-10.")
     try:
-        from core.config import load_config
+        from core.config import get_active_config, load_config
         from core.llm_client import setup_client
         from core.research.orchestrator import deep_research as _dr
 
-        config = load_config()
+        # Active config sesi (Bug 3) — hormati --config & /model; fallback
+        # load_config() untuk pemakaian standalone (CLI/test tanpa TUI).
+        config = get_active_config() or load_config()
         llm = setup_client(config)
         from core.research.bus import get_research_sink
         res = _run_coro(_dr(topic.strip(), max_rounds=max_rounds,
@@ -117,5 +119,30 @@ if __name__ == "__main__":
         _core_llm.setup_client = _orig_setup
     assert r["success"] and r["result"]["report"] == "laporan mock", r
     assert r["result"]["rounds"] == [{"round": 1}]
+
+    # 4. Active config menang atas load_config (fix Bug 3)
+    # Patch orchestrator.deep_research langsung (import di dalam fungsi
+    # terjadi saat call, jadi patch ini pasti kena).
+    import core.research.orchestrator as _orch
+    from core.config import set_active_config
+
+    _active = _NS(model="model-aktif", api_key="k")
+    set_active_config(_active)
+    try:
+        _seen_cfg: list = []
+
+        async def _cfg_dr(topic: str, **kwargs: Any) -> DeepResult:
+            _seen_cfg.append(kwargs.get("config"))
+            return DeepResult(report="x", sources=[], rounds=[])
+
+        _orig_dr = _orch.deep_research
+        _orch.deep_research = _cfg_dr
+        try:
+            r = deep_research("topik")
+        finally:
+            _orch.deep_research = _orig_dr
+        assert r["success"] and _seen_cfg and _seen_cfg[0] is _active, r
+    finally:
+        set_active_config(None)
 
     print("✅ deep_research tool self-test OK (validasi + mock)")

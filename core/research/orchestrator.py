@@ -81,9 +81,10 @@ def _default_scrape_fn(config: Any) -> Callable:
 
 
 def _default_llm(config: Any) -> Any:
-    from core.config import load_config
+    from core.config import get_active_config, load_config
     from core.llm_client import setup_client
-    return setup_client(config or load_config())
+    # Active config sesi (Bug 3) — hormati --config & /model.
+    return setup_client(config or get_active_config() or load_config())
 
 
 async def quick_research(

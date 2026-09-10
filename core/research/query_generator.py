@@ -132,9 +132,10 @@ async def generate_followup_queries(topic: str, findings: str, gaps: str,
 
 
 def _default_llm() -> Any:
-    from core.config import load_config
+    from core.config import get_active_config, load_config
     from core.llm_client import setup_client
-    return setup_client(load_config())
+    # Active config sesi (Bug 3) — hormati --config & /model.
+    return setup_client(get_active_config() or load_config())
 
 
 if __name__ == "__main__":

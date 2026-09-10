@@ -55,8 +55,9 @@ def _resolve_provider(search_provider: str = "",
         except Exception as e:
             return None, str(e)
     try:
-        from core.config import load_config
-        cfg = load_config()
+        from core.config import get_active_config, load_config
+        # Active config sesi (Bug 3) — hormati --config & /model.
+        cfg = get_active_config() or load_config()
     except SystemExit:
         return None, (
             "Search provider belum disetup. Tambah `search_provider` dan "
@@ -151,5 +152,25 @@ if __name__ == "__main__":
         assert seen["n"] == 5, seen
     finally:
         _sp.get_provider = _orig
+
+    # 7. Active config menang atas load_config (fix Bug 3)
+    from core.config import set_active_config
+
+    _active = SimpleNamespace(search_provider="tavily", search_api_key="k-aktif")
+    set_active_config(_active)
+    try:
+        _seen: list = []
+        import search_providers as _sp2
+        _orig2 = _sp2.get_provider
+        _sp2.get_provider = lambda cfg: (
+            _seen.append(cfg) or
+            type("H", (), {"search": lambda self, q, num_results=5: []})())
+        try:
+            r = web_search("x")
+        finally:
+            _sp2.get_provider = _orig2
+        assert r["success"] and _seen and _seen[0] is _active, r
+    finally:
+        set_active_config(None)
 
     print("✅ web_search self-test OK (validasi + mock + no-config)")

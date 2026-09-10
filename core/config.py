@@ -144,6 +144,25 @@ class ConfigError(Exception):
     """Error config yang friendly — pesannya bisa langsung ditampilkan ke user."""
 
 
+# ── Active config sesi (Bug 3) ───────────────────────────────────────────
+# Tool research (quick/deep_research, web_search, query_generator) tidak
+# menerima config dari LLM — mereka membaca dari sini. MultacdApp memasang
+# config-nya saat init, jadi `--config PATH` dan `/model X` tetap dihormati.
+# None → fallback load_config() seperti dulu (pemakaian standalone/CLI).
+_active_config: Config | None = None
+
+
+def set_active_config(cfg: Config | None) -> None:
+    """Pasang/cabut (None) config aktif sesi. Dipanggil MultacdApp saat init."""
+    global _active_config
+    _active_config = cfg
+
+
+def get_active_config() -> Config | None:
+    """Config sesi yang sedang jalan, atau None kalau tidak ada."""
+    return _active_config
+
+
 def resolve_config_path(explicit: Path | str | None = None) -> Path:
     """Urutan prioritas: argumen eksplisit > $MULTACD_CONFIG > ~/.multacd/config.yaml."""
     if explicit is not None:
@@ -232,6 +251,13 @@ def _mask_key(key: str) -> str:
 
 if __name__ == "__main__":
     cfg = load_config()
+
+    # Active config (Bug 3): set/get/clear simetris.
+    set_active_config(cfg)
+    assert get_active_config() is cfg
+    set_active_config(None)
+    assert get_active_config() is None
+
     print("✅ Config loaded OK")
     print(f"   model               : {cfg.model}")
     print(f"   api_key             : {_mask_key(cfg.api_key)}")

@@ -56,11 +56,13 @@ def quick_research(topic: str, language: str = "") -> dict[str, Any]:
     if not (topic or "").strip():
         return fail("Topik riset tidak boleh kosong.")
     try:
-        from core.config import load_config
+        from core.config import get_active_config, load_config
         from core.llm_client import setup_client
         from core.research.orchestrator import quick_research as _qr
 
-        config = load_config()
+        # Active config sesi (Bug 3) — hormati --config & /model; fallback
+        # load_config() untuk pemakaian standalone (CLI/test tanpa TUI).
+        config = get_active_config() or load_config()
         llm = setup_client(config)
         from core.research.bus import get_research_sink
         res = _run_coro(_qr(topic.strip(), config=config, llm=llm,
@@ -128,5 +130,30 @@ if __name__ == "__main__":
         _core_llm.setup_client = _orig_setup
     assert r["success"] and r["result"]["answer"] == "jawaban mock", r
     assert r["result"]["queries"] == ["q1"]
+
+    # 5. Active config menang atas load_config (fix Bug 3)
+    # Patch orchestrator.quick_research langsung (import di dalam fungsi
+    # terjadi saat call, jadi patch ini pasti kena).
+    import core.research.orchestrator as _orch
+    from core.config import set_active_config
+
+    _active = _NS(model="model-aktif", api_key="k")
+    set_active_config(_active)
+    try:
+        _seen_cfg: list = []
+
+        async def _cfg_qr(topic: str, **kwargs: Any) -> QuickResult:
+            _seen_cfg.append(kwargs.get("config"))
+            return QuickResult(answer="x", sources=[], queries=[])
+
+        _orig_qr = _orch.quick_research
+        _orch.quick_research = _cfg_qr
+        try:
+            r = quick_research("topik")
+        finally:
+            _orch.quick_research = _orig_qr
+        assert r["success"] and _seen_cfg and _seen_cfg[0] is _active, r
+    finally:
+        set_active_config(None)
 
     print("✅ quick_research tool self-test OK (validasi + bridge + mock)")
