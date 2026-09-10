@@ -40,6 +40,7 @@ SELF_TEST_MODULES = [
     "tools.git.git_push",
     "tui.widgets.diff_viewer",
     "tools.research.web_scrape",
+    "tools.research.web_search",
     "search_providers.base",
     "search_providers.tavily",
     "search_providers.exa",

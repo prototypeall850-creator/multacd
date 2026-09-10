@@ -79,6 +79,8 @@ from tools.memory.remember import SCHEMA as REMEMBER_SCHEMA
 from tools.memory.remember import remember
 from tools.research.web_scrape import SCHEMA as WEB_SCRAPE_SCHEMA
 from tools.research.web_scrape import web_scrape
+from tools.research.web_search import SCHEMA as WEB_SEARCH_SCHEMA
+from tools.research.web_search import web_search
 from tools.shell.bash import SCHEMA as BASH_SCHEMA
 from tools.shell.bash import bash
 from tools.web.web_fetch import SCHEMA as WEB_FETCH_SCHEMA
@@ -131,6 +133,8 @@ TOOL_REGISTRY: dict[str, tuple[ToolFunc, dict[str, Any]]] = {
     # web
     "web_fetch": (web_fetch, WEB_FETCH_SCHEMA),
     "web_scrape": (web_scrape, WEB_SCRAPE_SCHEMA),
+    # research
+    "web_search": (web_search, WEB_SEARCH_SCHEMA),
 }
 
 # Fail-fast: registry dan permission harus 1:1. Kalau tidak sama,
@@ -173,7 +177,7 @@ if __name__ == "__main__":
     os.environ["MULTACD_HOME"] = tmp_home
 
     defs = get_tool_definitions()
-    assert len(defs) == len(KNOWN_TOOLS) == 35, len(defs)
+    assert len(defs) == len(KNOWN_TOOLS) == 36, len(defs)
     for d in defs:
         assert d["type"] == "function" and d["function"]["name"], d
 

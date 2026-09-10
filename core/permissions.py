@@ -70,13 +70,16 @@ WRITE_TOOLS = frozenset({
 BASH_TOOLS = frozenset({"bash"})  # ⚠️ bisa apa saja
 WEB_TOOLS = frozenset({"web_fetch", "web_scrape"})
 
+# ── Search (baca internet, tanpa akses konten → selalu auto, tanpa override) ──
+SEARCH_TOOLS = frozenset({"web_search"})
+
 # ── Code execution (jalankan kode → selalu konfirmasi, tanpa override config) ──
 CODE_TOOLS = frozenset({
     "run_python",
     "run_tests",
 })
 
-AUTO_APPROVED: frozenset[str] = READ_TOOLS | META_TOOLS | GIT_TOOLS
+AUTO_APPROVED: frozenset[str] = READ_TOOLS | META_TOOLS | GIT_TOOLS | SEARCH_TOOLS
 ASK_REQUIRED: frozenset[str] = WRITE_TOOLS | BASH_TOOLS | WEB_TOOLS | CODE_TOOLS
 KNOWN_TOOLS: frozenset[str] = AUTO_APPROVED | ASK_REQUIRED
 
@@ -89,6 +92,8 @@ def check_permission(tool_name: str, config: Config | None = None) -> Decision:
     """
     if tool_name in META_TOOLS or tool_name in GIT_TOOLS:
         return "auto"
+    if tool_name in SEARCH_TOOLS:
+        return "auto"  # search saja: tanpa override config, selalu jalan
     if tool_name in READ_TOOLS:
         if config is not None and not config.auto_approve_reads:
             return "ask"
