@@ -163,7 +163,13 @@ async def run_agent(
                         yield AgentText(event.content)
                 elif isinstance(event, StreamDone):
                     done = event
-            assert done is not None
+            if done is None:
+                # Provider aneh: stream tutup tanpa StreamDone — jangan
+                # biarkan assert mentah, kasih pesan yang bisa dibaca user.
+                yield AgentError(
+                    "⚠️ Provider menutup stream tanpa hasil lengkap. "
+                    "Coba ulangi; kalau berulang, cek status provider / model.")
+                return
         except LLMError as e:
             yield AgentError(str(e))
             return
@@ -208,7 +214,10 @@ async def run_agent(
                     yield AgentToolDone(call.id, call.name, False, cancel_result)
                     continue
 
-            result = execute_tool(call.name, call.arguments)
+            # to_thread: tool sync jalan di thread, event loop tetap hidup.
+            # Tanpa ini, tool research (yang emit event via call_from_thread)
+            # deadlock — loop diblok nunggu thread, thread nunggu loop.
+            result = await asyncio.to_thread(execute_tool, call.name, call.arguments)
             context.add_tool_result(call.id, call.name, result)
             yield AgentToolDone(call.id, call.name, result["success"], result)
 

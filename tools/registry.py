@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import traceback
 from collections.abc import Callable
 from typing import Any
 
@@ -172,7 +173,13 @@ def execute_tool(name: str, params: dict[str, Any] | None = None) -> dict[str, A
     try:
         return func(**(params or {}))
     except TypeError as e:
-        return fail(f"Parameter salah untuk `{name}`: {e}")
+        # Bedakan salah-param (signature) vs bug di dalam body tool:
+        # TypeError signature terjadi di frame pemanggil saja (1 frame);
+        # TypeError dari body tool membawa frame tool juga (≥2 frame).
+        tb = traceback.extract_tb(e.__traceback__)
+        if len(tb) <= 1:
+            return fail(f"Parameter salah untuk `{name}`: {e}")
+        return fail(f"Tool `{name}` crash ({type(e).__name__}): {e}")
     except Exception as e:
         return fail(f"Tool `{name}` crash ({type(e).__name__}): {e}")
 
