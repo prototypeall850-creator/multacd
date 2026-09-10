@@ -41,6 +41,7 @@ SELF_TEST_MODULES = [
     "tui.widgets.diff_viewer",
     "tools.research.web_scrape",
     "tools.research.web_search",
+    "core.research.query_generator",
     "search_providers.base",
     "search_providers.tavily",
     "search_providers.exa",
