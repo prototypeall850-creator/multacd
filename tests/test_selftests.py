@@ -42,6 +42,8 @@ SELF_TEST_MODULES = [
     "tools.research.web_scrape",
     "tools.research.web_search",
     "core.research.query_generator",
+    "core.research.orchestrator",
+    "tools.research.quick_research",
     "search_providers.base",
     "search_providers.tavily",
     "search_providers.exa",

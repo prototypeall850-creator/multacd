@@ -73,6 +73,9 @@ WEB_TOOLS = frozenset({"web_fetch", "web_scrape"})
 # ── Search (baca internet, tanpa akses konten → selalu auto, tanpa override) ──
 SEARCH_TOOLS = frozenset({"web_search"})
 
+# ── Research (ASK: akses internet + bakar token LLM) ──
+RESEARCH_TOOLS = frozenset({"quick_research"})
+
 # ── Code execution (jalankan kode → selalu konfirmasi, tanpa override config) ──
 CODE_TOOLS = frozenset({
     "run_python",
@@ -80,7 +83,7 @@ CODE_TOOLS = frozenset({
 })
 
 AUTO_APPROVED: frozenset[str] = READ_TOOLS | META_TOOLS | GIT_TOOLS | SEARCH_TOOLS
-ASK_REQUIRED: frozenset[str] = WRITE_TOOLS | BASH_TOOLS | WEB_TOOLS | CODE_TOOLS
+ASK_REQUIRED: frozenset[str] = WRITE_TOOLS | BASH_TOOLS | WEB_TOOLS | CODE_TOOLS | RESEARCH_TOOLS
 KNOWN_TOOLS: frozenset[str] = AUTO_APPROVED | ASK_REQUIRED
 
 
@@ -112,6 +115,9 @@ def check_permission(tool_name: str, config: Config | None = None) -> Decision:
         return "ask"
     if tool_name in CODE_TOOLS:
         return "ask"  # eksekusi kode: tanpa override config, selalu tanya
+    if tool_name in RESEARCH_TOOLS:
+        return "ask"  # research: internet + token, tanpa override config
+    return "deny"
     return "deny"
 
 
@@ -148,12 +154,13 @@ if __name__ == "__main__":
     assert check_permission("") == "deny"
 
     # Override config: user matikan semua ask → semua known jadi auto,
-    # KECUALI eksekusi kode (CODE_TOOLS selalu ask, tanpa override).
+    # KECUALI eksekusi kode (CODE_TOOLS) dan research (RESEARCH_TOOLS) —
+    # keduanya selalu ask, tanpa override.
     yolo = Config(model="m", api_key="k", auto_approve_reads=True,
                   ask_before_write=False, ask_before_bash=False, ask_before_web=False)
-    for t in sorted(KNOWN_TOOLS - CODE_TOOLS):
+    for t in sorted(KNOWN_TOOLS - CODE_TOOLS - RESEARCH_TOOLS):
         assert check_permission(t, yolo) == "auto", t
-    for t in sorted(CODE_TOOLS):
+    for t in sorted(CODE_TOOLS | RESEARCH_TOOLS):
         assert check_permission(t, yolo) == "ask", t
 
     # Override config: paranoid → read pun ikut ask.
