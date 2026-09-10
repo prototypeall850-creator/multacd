@@ -26,7 +26,7 @@ from tui.widgets.confirm_dialog import AskDialog
 from tui.widgets.diff_viewer import DiffViewer
 from tui.widgets.file_tree import FileOpenRequested, ProjectTree, modified_files
 from tui.widgets.input_bar import InputBar, InputSubmitted
-from tui.widgets.permission_bar import PermissionBar
+from tui.widgets.permission_popup import PermissionPopup
 from tui.widgets.slash_palette import SlashPalette
 from tui.widgets.sources_panel import (
     ExportResearchRequested,
@@ -95,9 +95,11 @@ class MainScreen(Screen):
         background: $surface;
         padding: 0 1;
     }
-    #permission-bar {
-        height: 1;
+    #permission-popup {
         display: none;
+        height: auto;
+        max-height: 7;
+        border: solid $warning;
         background: $surface;
         padding: 0 1;
     }
@@ -121,7 +123,7 @@ class MainScreen(Screen):
             yield SourcesPanel()
         yield DiffViewer()
         yield ThinkingBar()
-        yield PermissionBar()
+        yield PermissionPopup()
         yield SlashPalette()
         yield InputBar()
 
@@ -236,10 +238,10 @@ class MainScreen(Screen):
         if event.key.lower() not in ("y", "n", "a", "enter", "escape"):
             return
         try:
-            perm = self.query_one(PermissionBar)
+            perm = self.query_one(PermissionPopup)
         except Exception:
             return
-        if perm.is_waiting and perm.handle_key(event.key):
+        if perm.is_waiting and perm.answer_key(event.key):
             event.prevent_default()
             event.stop()
 
@@ -386,7 +388,7 @@ class MainScreen(Screen):
     async def _confirm(self, tool_name: str, params: dict[str, Any]) -> str:
         bar = self.query_one(StatusBar)
         think = self.query_one(ThinkingBar)
-        perm = self.query_one(PermissionBar)
+        perm = self.query_one(PermissionPopup)
         bar.set_status("waiting")
         think.hide()  # permission bar gantikan thinking bar sementara
         try:

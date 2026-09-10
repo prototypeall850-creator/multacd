@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 from rich.text import Text
+from textual import events
 from textual.message import Message
 from textual.widgets import DirectoryTree
 from textual.widgets._tree import TreeNode
@@ -81,6 +82,19 @@ class ProjectTree(DirectoryTree):
 
     def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
         self.post_message(FileOpenRequested(str(event.path)))
+
+    async def on_key(self, event: events.Key) -> None:
+        # Permission menunggu → tombol jawab didahulukan (Tree menelan
+        # keystrokes buat quick-search, jadi screen fallback tak sampai).
+        if event.key.lower() in ("y", "n", "a", "enter", "escape"):
+            try:
+                from tui.widgets.permission_popup import PermissionPopup
+                perm = self.screen.query_one(PermissionPopup)
+            except Exception:
+                return
+            if perm.is_waiting and perm.answer_key(event.key):
+                event.prevent_default()
+                event.stop()
 
     def mark_modified(self, modified: set[str]) -> None:
         """Tandai file modified dengan ● (dipanggil saat tree ditampilkan)."""

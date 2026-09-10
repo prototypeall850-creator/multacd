@@ -6,7 +6,7 @@ from textual import events
 from textual.message import Message
 from textual.widgets import TextArea
 
-from tui.widgets.permission_bar import PermissionBar
+from tui.widgets.permission_popup import PermissionPopup
 from tui.widgets.slash_palette import SlashPalette
 
 
@@ -34,7 +34,7 @@ class InputBar(TextArea):
                 "y", "n", "a", "enter", "escape"):
             event.prevent_default()
             event.stop()
-            perm.handle_key(event.key)
+            perm.answer_key(event.key)
             return
         pal = self._open_palette()
         if pal is not None:
@@ -79,10 +79,10 @@ class InputBar(TextArea):
             return None
         return pal if pal.is_open else None
 
-    def _waiting_perm(self) -> PermissionBar | None:
-        """PermissionBar yang menunggu jawaban (None kalau tidak ada)."""
+    def _waiting_perm(self) -> PermissionPopup | None:
+        """PermissionPopup yang menunggu jawaban (None kalau tidak ada)."""
         try:
-            perm = self.screen.query_one(PermissionBar)
+            perm = self.screen.query_one(PermissionPopup)
         except Exception:
             return None
         return perm if perm.is_waiting else None

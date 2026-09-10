@@ -1,7 +1,7 @@
 """Dialog modal: pertanyaan agent ke user.
 
-NOTE: konfirmasi tool (Y/N/A) pindah ke PermissionBar 1-baris di atas
-input (DESIGN §4, fase DESIGN D3). File ini tinggal AskDialog.
+NOTE: konfirmasi tool (Y/N/A) pindah ke PermissionPopup (panel tombol di
+atas input). File ini tinggal AskDialog.
 """
 
 from __future__ import annotations

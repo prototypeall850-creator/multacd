@@ -13,6 +13,7 @@ from contextlib import suppress
 from typing import Any
 from urllib.parse import urlsplit
 
+from textual import events
 from textual.containers import Vertical
 from textual.message import Message
 from textual.widgets import Button, Label, ListItem, ListView, Static
@@ -143,6 +144,18 @@ class SourcesPanel(Vertical):
         if idx is not None:
             self.post_message(
                 SourcePreviewRequested(self._items[idx]["url"]))
+
+    async def on_key(self, event: events.Key) -> None:
+        # Permission menunggu → Y/N/A/Esc jawab dulu (Enter tetap preview).
+        if event.key.lower() in ("y", "n", "a", "escape"):
+            try:
+                from tui.widgets.permission_popup import PermissionPopup
+                perm = self.screen.query_one(PermissionPopup)
+            except Exception:
+                return
+            if perm.is_waiting and perm.answer_key(event.key):
+                event.prevent_default()
+                event.stop()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "sources-export":

@@ -50,7 +50,7 @@ SELF_TEST_MODULES = [
     "tui.icons",
     "tui.themes",
     "tui.widgets.thinking_bar",
-    "tui.widgets.permission_bar",
+    "tui.widgets.permission_popup",
     "tui.widgets.tool_activity",
     "tui.widgets.slash_palette",
     "tui.screens.setup_wizard",
