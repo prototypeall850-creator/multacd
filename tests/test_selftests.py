@@ -49,6 +49,7 @@ SELF_TEST_MODULES = [
     "tools.research.export_research",
     "tui.icons",
     "tui.themes",
+    "tui.widgets.thinking_bar",
     "search_providers.base",
     "search_providers.tavily",
     "search_providers.exa",

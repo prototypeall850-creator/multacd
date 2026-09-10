@@ -21,6 +21,7 @@ class InputBar(TextArea):
     def __init__(self) -> None:
         super().__init__("", id="input-bar", language=None)
         self.show_line_numbers = False
+        self.border_title = "Enter kirim · /help · Ctrl+T tree · Ctrl+R sources"
 
     async def on_key(self, event: events.Key) -> None:
         if event.key == "enter":

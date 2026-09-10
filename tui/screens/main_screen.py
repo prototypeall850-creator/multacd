@@ -30,6 +30,7 @@ from tui.widgets.sources_panel import (
     SourcesPanel,
 )
 from tui.widgets.status_bar import StatusBar
+from tui.widgets.thinking_bar import ThinkingBar
 
 
 class MainScreen(Screen):
@@ -54,13 +55,19 @@ class MainScreen(Screen):
         height: 1fr;
     }
     #file-tree {
-        width: 36;
+        width: 25%;
+        min-width: 28;
         display: none;
-        border-right: solid $primary;
+        border-left: solid $primary;
     }
     #chat-panel {
         height: 1fr;
         padding: 0 1;
+    }
+    #thinking-bar {
+        height: 1;
+        padding: 0 1;
+        color: $text-muted;
     }
     #sources-panel {
         width: 30%;
@@ -91,10 +98,11 @@ class MainScreen(Screen):
     def compose(self) -> ComposeResult:
         yield StatusBar()
         with Horizontal(id="body"):
-            yield ProjectTree(self.app.workdir)
             yield ChatPanel()
+            yield ProjectTree(self.app.workdir)
             yield SourcesPanel()
         yield DiffViewer()
+        yield ThinkingBar()
         yield InputBar()
 
     def on_mount(self) -> None:
@@ -217,9 +225,11 @@ class MainScreen(Screen):
         chat = self.query_one(ChatPanel)
         bar = self.query_one(StatusBar)
         inbar = self.query_one(InputBar)
+        think = self.query_one(ThinkingBar)
         try:
             inbar.set_busy(True)
             bar.set_status("thinking")
+            think.show("thinking")
             # /clear: bersihkan UI dulu biar command + respons tetap kelihatan.
             # (Single source of truth parsing tetap ModeManager di agent_loop.)
             stripped = text.strip().lower()
@@ -246,8 +256,10 @@ class MainScreen(Screen):
                 if isinstance(event, AgentText):
                     await chat.append_assistant_text(event.delta)
                 elif isinstance(event, AgentToolStart):
+                    think.show(event.name)
                     await chat.add_tool_row(event.call_id, event.name, event.params)
                 elif isinstance(event, AgentToolDone):
+                    think.show("thinking")
                     await chat.update_tool_row(event.call_id, event.name, event.success)
                 elif isinstance(event, AgentDone):
                     pass  # teks sudah ter-stream penuh
@@ -255,6 +267,7 @@ class MainScreen(Screen):
                     await chat.add_error(event.message)
         finally:
             set_research_sink(None)
+            think.hide()
             self._sync_mode_ui()
             bar.set_status("idle")
             inbar.set_busy(False)
