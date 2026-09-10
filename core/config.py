@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 # Hormati MULTACD_HOME (isolation test) — konsisten dengan memory/store.py
 # dan tools/agent/skill.py. Dievaluasi saat import; test set env sebelum subprocess.
@@ -66,6 +66,20 @@ ask_before_web: true         # web_fetch → konfirmasi dulu
 theme: "dark"                # dark | light
 show_tool_calls: true        # tampilkan nama tool yang dijalankan
 show_thinking: false         # tampilkan reasoning LLM (verbose mode)
+
+# ── Search Provider (BYOK, Phase 3) ────────────────────
+search_provider: "tavily"    # tavily | exa | brave | serpapi | duckduckgo
+search_api_key: "tvly-xxxx"  # tidak perlu untuk duckduckgo (gratis, tidak resmi)
+
+# ── Research Settings (Phase 3) ────────────────────────
+search_results_per_query: 5     # hasil per query saat search
+research_quick_queries: 3       # jumlah query untuk quick research
+research_quick_max_sources: 5   # max sumber yang dibaca quick research
+research_deep_rounds: 5         # max round untuk deep research
+research_deep_queries_per_round: 4  # query per round di deep research
+research_deep_max_sources: 20   # max total sumber deep research
+research_scrape_timeout: 15     # timeout scraping per URL (detik)
+research_snippet_fallback: true # pakai snippet kalau scraping gagal
 """
 
 
@@ -92,6 +106,26 @@ class Config(BaseModel):
     theme: Literal["dark", "light"] = "dark"
     show_tool_calls: bool = True
     show_thinking: bool = False
+
+    # ── Search provider (BYOK, Phase 3) ──
+    search_provider: Literal["tavily", "exa", "brave", "serpapi", "duckduckgo"] = "tavily"
+    search_api_key: str = ""
+
+    # ── Research settings (Phase 3) ──
+    search_results_per_query: int = Field(default=5, gt=0)
+    research_quick_queries: int = Field(default=3, gt=0)
+    research_quick_max_sources: int = Field(default=5, gt=0)
+    research_deep_rounds: int = Field(default=5, gt=0, le=10)
+    research_deep_queries_per_round: int = Field(default=4, gt=0)
+    research_deep_max_sources: int = Field(default=20, gt=0)
+    research_scrape_timeout: int = Field(default=15, gt=0)
+    research_snippet_fallback: bool = True
+
+    @field_validator("search_provider", mode="before")
+    @classmethod
+    def _norm_provider(cls, v: object) -> object:
+        # "Tavily", " TAVILY " → "tavily" (maafkan kapital/spasi user).
+        return v.lower().strip() if isinstance(v, str) else v
 
 
 class ConfigError(Exception):

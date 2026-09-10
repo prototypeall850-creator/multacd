@@ -39,6 +39,13 @@ SELF_TEST_MODULES = [
     "tools.git.git_merge",
     "tools.git.git_push",
     "tui.widgets.diff_viewer",
+    "search_providers.base",
+    "search_providers.tavily",
+    "search_providers.exa",
+    "search_providers.brave",
+    "search_providers.serpapi",
+    "search_providers.duckduckgo",
+    "search_providers",
 ]
 
 
