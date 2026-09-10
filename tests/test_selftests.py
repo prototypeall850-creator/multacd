@@ -50,6 +50,7 @@ SELF_TEST_MODULES = [
     "tui.icons",
     "tui.themes",
     "tui.widgets.thinking_bar",
+    "tui.widgets.permission_bar",
     "search_providers.base",
     "search_providers.tavily",
     "search_providers.exa",

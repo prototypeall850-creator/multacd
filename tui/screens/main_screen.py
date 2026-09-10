@@ -20,10 +20,11 @@ from core.agent_loop import (
 from core.codebase import get_git_summary
 from core.research.bus import set_research_sink
 from tui.widgets.chat_panel import ChatPanel
-from tui.widgets.confirm_dialog import AskDialog, ConfirmDialog
+from tui.widgets.confirm_dialog import AskDialog
 from tui.widgets.diff_viewer import DiffViewer
 from tui.widgets.file_tree import FileOpenRequested, ProjectTree, modified_files
 from tui.widgets.input_bar import InputBar, InputSubmitted
+from tui.widgets.permission_bar import PermissionBar
 from tui.widgets.sources_panel import (
     ExportResearchRequested,
     SourcePreviewRequested,
@@ -83,6 +84,12 @@ class MainScreen(Screen):
         border-top: solid $warning;
         padding: 0 1;
     }
+    #permission-bar {
+        height: 1;
+        display: none;
+        background: $surface;
+        padding: 0 1;
+    }
     #input-bar {
         height: 5;
         border: solid $primary;
@@ -103,6 +110,7 @@ class MainScreen(Screen):
             yield SourcesPanel()
         yield DiffViewer()
         yield ThinkingBar()
+        yield PermissionBar()
         yield InputBar()
 
     def on_mount(self) -> None:
@@ -306,14 +314,15 @@ class MainScreen(Screen):
 
     async def _confirm(self, tool_name: str, params: dict[str, Any]) -> str:
         bar = self.query_one(StatusBar)
+        think = self.query_one(ThinkingBar)
+        perm = self.query_one(PermissionBar)
         bar.set_status("waiting")
+        think.hide()  # permission bar gantikan thinking bar sementara
         try:
-            # wait_for_dismiss=True: await kembalikan nilai dismiss (yes/no/all),
-            # bukan None. Wajib dipanggil dari worker (kita di run_worker).
-            return await self.app.push_screen(ConfirmDialog(tool_name, params),
-                                              wait_for_dismiss=True)
+            return await perm.ask(tool_name, params)
         finally:
             bar.set_status("thinking")
+            think.show("thinking")
 
     async def _ask_user(self, question: str) -> str:
         return await self.app.push_screen(AskDialog(question), wait_for_dismiss=True)
