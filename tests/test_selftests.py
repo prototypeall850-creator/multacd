@@ -1,0 +1,69 @@
+"""Regression suite: jalankan self-test bawaan tiap modul via subprocess.
+
+Setiap modul inti punya blok `if __name__ == "__main__"` berisi assert
+(pola self-test project ini). Test ini memastikan semuanya tetap hijau
+tanpa perlu refactor — jadi `run_tests` punya sesuatu untuk di-collect.
+
+Isolasi: semua subprocess dapat MULTACD_HOME menunjuk folder sementara,
+jadi memory/skill/config tidak menyentuh data asli user.
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Home terisolasi untuk semua subprocess test (dibuat sekali per sesi).
+_ISOLATED_HOME = tempfile.mkdtemp(prefix="multacd-pytest-home-")
+
+# Modul dengan self-test `python -m <module>` (exit 0 = lolos).
+SELF_TEST_MODULES = [
+    "core.agent_loop",
+    "core.llm_client",
+    "core.permissions",
+    "core.mode_manager",
+    "core.codebase",
+    "core.prompt_composer",
+    "memory.context",
+    "tools.registry",
+    "tools.code.run_python",
+    "tools.code.lint_python",
+    "tools.code.run_tests",
+    "tools.git.git_merge",
+    "tools.git.git_push",
+    "tui.widgets.diff_viewer",
+]
+
+
+@pytest.mark.parametrize("module", SELF_TEST_MODULES)
+def test_module_selftest(module: str) -> None:
+    """Self-test `python -m <module>` harus exit 0."""
+    env = {**os.environ, "MULTACD_HOME": _ISOLATED_HOME}
+    proc = subprocess.run(
+        [sys.executable, "-m", module],
+        cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=180, env=env,
+    )
+    assert proc.returncode == 0, (
+        f"{module} gagal:\n--- stdout ---\n{proc.stdout}\n--- stderr ---\n{proc.stderr}"
+    )
+
+
+def test_config_respects_multacd_home() -> None:
+    """Regression: core/config.py harus hormati MULTACD_HOME (isolation test).
+
+    Dulu CONFIG_DIR hardcode Path.home() → test bisa baca config/API key asli.
+    """
+    env = {**os.environ, "MULTACD_HOME": _ISOLATED_HOME}
+    proc = subprocess.run(
+        [sys.executable, "-c", "from core.config import CONFIG_DIR; print(CONFIG_DIR)"],
+        cwd=PROJECT_ROOT, capture_output=True, text=True, env=env,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert _ISOLATED_HOME in proc.stdout, proc.stdout
