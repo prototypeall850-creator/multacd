@@ -40,6 +40,21 @@ HELP_TEXT = (
     "  /help          → tampilkan pesan ini"
 )
 
+# Single source buat slash palette (nama + deskripsi singkat).
+PALETTE_COMMANDS: tuple[tuple[str, str], ...] = (
+    ("/code", "Switch to Coding Agent mode"),
+    ("/research", "Switch to Research Agent mode"),
+    ("/personal", "Switch to Personal Agent mode"),
+    ("/clear", "Clear conversation history"),
+    ("/scan", "Re-scan codebase"),
+    ("/model", "Switch LLM model"),
+    ("/soul", "Show active soul.md"),
+    ("/help", "Show all commands"),
+)
+
+# Command yang butuh argumen lanjutan → Enter = autocomplete, bukan submit.
+COMMANDS_WITH_ARGS = frozenset({"/model"})
+
 MODE_PROMPTS = {
     MODE_CODE: (
         "Kamu sedang dalam Coding Agent mode. "

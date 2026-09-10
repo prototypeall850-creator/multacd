@@ -8,6 +8,7 @@ from typing import Any
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.screen import Screen
+from textual.widgets import TextArea
 
 from core.agent_loop import (
     AgentDone,
@@ -25,6 +26,7 @@ from tui.widgets.diff_viewer import DiffViewer
 from tui.widgets.file_tree import FileOpenRequested, ProjectTree, modified_files
 from tui.widgets.input_bar import InputBar, InputSubmitted
 from tui.widgets.permission_bar import PermissionBar
+from tui.widgets.slash_palette import SlashPalette
 from tui.widgets.sources_panel import (
     ExportResearchRequested,
     SourcePreviewRequested,
@@ -84,6 +86,14 @@ class MainScreen(Screen):
         border-top: solid $warning;
         padding: 0 1;
     }
+    #slash-palette {
+        display: none;
+        height: auto;
+        max-height: 12;
+        border: solid $primary;
+        background: $surface;
+        padding: 0 1;
+    }
     #permission-bar {
         height: 1;
         display: none;
@@ -111,6 +121,7 @@ class MainScreen(Screen):
         yield DiffViewer()
         yield ThinkingBar()
         yield PermissionBar()
+        yield SlashPalette()
         yield InputBar()
 
     def on_mount(self) -> None:
@@ -167,7 +178,51 @@ class MainScreen(Screen):
             tree.mark_modified(modified_files(self.app.workdir))
 
     async def on_input_submitted(self, event: InputSubmitted) -> None:
+        self.query_one(SlashPalette).close()
         self._submit(event.value)
+
+    async def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        """Ketik / di awal input → buka palette, filter real-time."""
+        if event.text_area.id != "input-bar":
+            return
+        pal = self.query_one(SlashPalette)
+        text = event.text_area.text
+        if pal.suppress_next:
+            pal.suppress_next = False
+            pal.close()
+            return
+        if text.startswith("/") and " " not in text and "\n" not in text:
+            pal.open(text[1:])
+        else:
+            pal.close()
+
+    def palette_select(self) -> None:
+        """Enter/klik di palette: submit (atau autocomplete kalau butuh arg)."""
+        pal = self.query_one(SlashPalette)
+        inbar = self.query_one(InputBar)
+        cmd = pal.selected_command
+        if cmd is None:
+            pal.close()
+            return
+        if SlashPalette.needs_arg(cmd):
+            inbar.text = cmd + " "
+            pal.close()
+            inbar.focus()
+        else:
+            inbar.clear()
+            pal.close()
+            self.post_message(InputSubmitted(cmd))
+
+    def palette_autocomplete(self) -> None:
+        """Tab: tulis command terpilih ke input tanpa submit."""
+        pal = self.query_one(SlashPalette)
+        inbar = self.query_one(InputBar)
+        cmd = pal.selected_command
+        pal.suppress_next = True  # Changed dari set text tidak buka lagi
+        if cmd is not None:
+            inbar.text = cmd
+        pal.close()
+        inbar.focus()
 
     async def on_file_open_requested(self, event: FileOpenRequested) -> None:
         """Klik/Enter file di tree → agent baca file itu."""

@@ -6,6 +6,8 @@ from textual import events
 from textual.message import Message
 from textual.widgets import TextArea
 
+from tui.widgets.slash_palette import SlashPalette
+
 
 class InputSubmitted(Message):
     """Dikirim saat user submit (Enter)."""
@@ -24,6 +26,29 @@ class InputBar(TextArea):
         self.border_title = "Enter kirim · /help · Ctrl+T tree · Ctrl+R sources"
 
     async def on_key(self, event: events.Key) -> None:
+        pal = self._open_palette()
+        if pal is not None:
+            # Palette terbuka → tombol dinavigasi palette, bukan editing.
+            if event.key in ("up", "down"):
+                event.prevent_default()
+                event.stop()
+                pal.move(1 if event.key == "down" else -1)
+                return
+            if event.key == "enter":
+                event.prevent_default()
+                event.stop()
+                self.screen.palette_select()
+                return
+            if event.key == "escape":
+                event.prevent_default()
+                event.stop()
+                pal.close()
+                return
+            if event.key == "tab":
+                event.prevent_default()
+                event.stop()
+                self.screen.palette_autocomplete()
+                return
         if event.key == "enter":
             event.prevent_default()
             event.stop()
@@ -35,6 +60,14 @@ class InputBar(TextArea):
             event.prevent_default()
             event.stop()
             self.insert("\n")
+
+    def _open_palette(self) -> SlashPalette | None:
+        """Palette yang sedang terbuka (None kalau tidak ada/tutup)."""
+        try:
+            pal = self.screen.query_one(SlashPalette)
+        except Exception:
+            return None
+        return pal if pal.is_open else None
 
     def set_busy(self, busy: bool) -> None:
         """Disable saat agent berpikir (hindari submit ganda)."""
