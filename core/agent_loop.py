@@ -176,7 +176,7 @@ async def run_agent(
                 yield AgentToolDone(call.id, "ask", True)
                 continue
 
-            decision = checker.check(call.name)
+            decision = checker.check(call.name, call.arguments)
             if decision == "deny":
                 context.add_tool_result(call.id, call.name, fail(
                     f"Tool `{call.name}` tidak tersedia. Pakai tool dari daftar yang ada."))

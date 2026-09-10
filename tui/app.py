@@ -7,6 +7,7 @@ from pathlib import Path
 from textual.app import App
 
 from core.config import Config
+from core.codebase import project_label, scan_project
 from core.llm_client import LLMClient
 from core.mode_manager import ModeManager
 from core.prompt_composer import PromptComposer, load_soul
@@ -36,9 +37,25 @@ class MultacdApp(App[None]):
         self._quit_armed = False
         # Mode + prompt composer (soul di-load sekali saat startup).
         soul = load_soul(project_dir=_PROJECT_ROOT)
-        self.mode_manager = ModeManager(config, soul=soul)
         self.composer = PromptComposer(soul=soul)
+        self.project_ctx = ""
+        self.project_label = "?"
+        self.refresh_project_ctx()  # startup scan (fallback aman di dalam)
+        self.mode_manager = ModeManager(config, soul=soul,
+                                        rescan_fn=self.refresh_project_ctx)
         self.composer.update_mode(self.mode_manager.get_mode_prompt())
+
+    def refresh_project_ctx(self, root: Path | str | None = None) -> str:
+        """Scan ulang codebase → update composer. Tidak pernah raise."""
+        try:
+            root_path = Path(root) if root else Path.cwd()
+            self.project_ctx = scan_project(root_path)
+            self.project_label = project_label(root_path)
+        except Exception as e:
+            self.project_ctx = f"(scan gagal: {type(e).__name__}: {e})"
+            self.project_label = "?"
+        self.composer.update_project_ctx(self.project_ctx)
+        return f"🔍 {self.project_label} — context diperbarui."
 
     def on_mount(self) -> None:
         screen = MainScreen()

@@ -17,6 +17,7 @@ Test cepat:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -42,7 +43,8 @@ HELP_TEXT = (
 MODE_PROMPTS = {
     MODE_CODE: (
         "Kamu sedang dalam Coding Agent mode. "
-        "Kamu punya akses ke: filesystem, shell, git. "
+        "Kamu punya akses ke: filesystem, shell, git, "
+        "run_python, lint_python, run_tests. "
         "Fokus membantu user dengan kode dan development workflow."
     ),
     MODE_RESEARCH: (
@@ -71,12 +73,19 @@ class CommandResult:
 
 
 class ModeManager:
-    """Pegang mode aktif + parse /command. Default: /code."""
+    """Pegang mode aktif + parse /command. Default: /code.
 
-    def __init__(self, config: Config | None = None, soul: str = "") -> None:
+    `rescan_fn`: callback () -> str pesan display; dipasang app TUI
+    agar /scan refresh project context + composer (lihat tui/app.py).
+    Tanpa itu, /scan cuma return sinyal tanpa eksekusi.
+    """
+
+    def __init__(self, config: Config | None = None, soul: str = "",
+                 rescan_fn: Callable[[], str] | None = None) -> None:
         self._mode = MODE_CODE
         self._config = config
         self._soul = soul
+        self._rescan_fn = rescan_fn
 
     def get_mode(self) -> str:
         return self._mode
@@ -122,8 +131,12 @@ class ModeManager:
         if cmd == "/clear":
             return CommandResult(True, "🧹 History dibersihkan — mulai sesi baru.", "clear")
         if cmd == "/scan":
-            # Scan engine-nya di Step 3; di sini cuma sinyal.
-            return CommandResult(True, "🔍 Scan ulang codebase belum tersedia (menyusul Step 3).", "scan")
+            if self._rescan_fn is None:
+                return CommandResult(True, "🔍 Scan ulang belum wiring (jalan di TUI).", "scan")
+            try:
+                return CommandResult(True, self._rescan_fn(), "scan")
+            except Exception as e:
+                return CommandResult(True, f"❌ Scan gagal ({type(e).__name__}): {e}", None)
         if cmd == "/model":
             if not arg:
                 current = self._config.model if self._config else "?"
@@ -184,4 +197,12 @@ if __name__ == "__main__":
     mm2 = ModeManager()
     assert "tidak tersedia" in mm2.handle_command("/model x").message
 
-    print("✅ mode_manager self-test OK (8 skenario)")
+    # 9. /scan tanpa callback → sinyal; dengan callback → pesan display
+    assert mm2.handle_command("/scan").action == "scan"
+    mm3 = ModeManager(rescan_fn=lambda: "🔍 demo · Python — context diperbarui.")
+    r = mm3.handle_command("/scan")
+    assert r.action == "scan" and "demo" in r.message, r
+    mm4 = ModeManager(rescan_fn=lambda: (_ for _ in ()).throw(RuntimeError("disk")))
+    assert "gagal" in mm4.handle_command("/scan").message.lower()
+
+    print("✅ mode_manager self-test OK (9 skenario)")

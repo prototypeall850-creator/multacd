@@ -20,6 +20,14 @@ from tools.agent.task import SCHEMA as TASK_SCHEMA
 from tools.agent.task import task
 from tools.agent.todo_write import SCHEMA as TODO_WRITE_SCHEMA
 from tools.agent.todo_write import todo_write
+from tools.codebase.scan_codebase import SCHEMA as SCAN_CODEBASE_SCHEMA
+from tools.codebase.scan_codebase import scan_codebase
+from tools.code.lint_python import SCHEMA as LINT_PYTHON_SCHEMA
+from tools.code.lint_python import lint_python
+from tools.code.run_python import SCHEMA as RUN_PYTHON_SCHEMA
+from tools.code.run_python import run_python
+from tools.code.run_tests import SCHEMA as RUN_TESTS_SCHEMA
+from tools.code.run_tests import run_tests
 from tools.filesystem.apply_patch import SCHEMA as APPLY_PATCH_SCHEMA
 from tools.filesystem.apply_patch import apply_patch
 from tools.filesystem.delete_file import SCHEMA as DELETE_FILE_SCHEMA
@@ -109,6 +117,12 @@ TOOL_REGISTRY: dict[str, tuple[ToolFunc, dict[str, Any]]] = {
     "ask": (ask, ASK_SCHEMA),
     "skill": (skill, SKILL_SCHEMA),
     "todo_write": (todo_write, TODO_WRITE_SCHEMA),
+    # codebase
+    "scan_codebase": (scan_codebase, SCAN_CODEBASE_SCHEMA),
+    # code execution
+    "run_python": (run_python, RUN_PYTHON_SCHEMA),
+    "lint_python": (lint_python, LINT_PYTHON_SCHEMA),
+    "run_tests": (run_tests, RUN_TESTS_SCHEMA),
     # web
     "web_fetch": (web_fetch, WEB_FETCH_SCHEMA),
 }
@@ -153,7 +167,7 @@ if __name__ == "__main__":
     os.environ["MULTACD_HOME"] = tmp_home
 
     defs = get_tool_definitions()
-    assert len(defs) == len(KNOWN_TOOLS) == 29, len(defs)
+    assert len(defs) == len(KNOWN_TOOLS) == 33, len(defs)
     for d in defs:
         assert d["type"] == "function" and d["function"]["name"], d
 
