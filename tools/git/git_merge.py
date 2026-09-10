@@ -41,7 +41,8 @@ def _parse_conflicts(workdir: str, files: list[str]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for name in files:
         try:
-            text = open(f"{workdir}/{name}", encoding="utf-8").read()
+            with open(f"{workdir}/{name}", encoding="utf-8") as fh:
+                text = fh.read()
         except (OSError, UnicodeDecodeError):
             continue
         for m in CONFLICT_RE.finditer(text):

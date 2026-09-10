@@ -7,8 +7,8 @@ from pathlib import Path
 from textual.app import App
 from textual.binding import Binding
 
-from core.config import Config
 from core.codebase import get_git_summary, project_label, scan_project
+from core.config import Config
 from core.llm_client import LLMClient
 from core.mode_manager import ModeManager
 from core.prompt_composer import PromptComposer, load_soul

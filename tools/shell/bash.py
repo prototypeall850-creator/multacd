@@ -42,7 +42,7 @@ def bash(command: str, workdir: str = ".", timeout: int = DEFAULT_TIMEOUT) -> di
     shell = detect_shell()
     try:
         proc = subprocess.run(
-            shell + [command] if shell[-1] in ("-c", "-Command") else shell + [command],
+            [*shell, command],
             cwd=workdir,
             capture_output=True,
             text=True,

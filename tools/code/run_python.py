@@ -14,6 +14,7 @@ Test cepat:
 
 from __future__ import annotations
 
+import contextlib
 import shutil
 import subprocess
 import tempfile
@@ -21,7 +22,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from tools.common import fail, ok
+from tools.common import fail
 
 SCHEMA: dict[str, Any] = {
     "type": "function",
@@ -124,10 +125,8 @@ def run_python(file_path: str | None = None, code: str | None = None,
         return fail(f"Gagal jalan: {e}")
     finally:
         if tmp_path is not None:
-            try:
+            with contextlib.suppress(OSError):
                 tmp_path.unlink()
-            except OSError:
-                pass
 
 
 if __name__ == "__main__":

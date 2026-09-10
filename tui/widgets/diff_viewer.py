@@ -36,7 +36,7 @@ def render_diff(diff_text: str) -> Text:
     if not diff_text.strip() or diff_text.strip() == "(tidak ada output)":
         return Text("(bersih, tidak ada perubahan)", style="dim")
     for line in diff_text.splitlines():
-        if line.startswith("+++") or line.startswith("---"):
+        if line.startswith(("+++", "---")):
             t.append(line + "\n", style="dim")
         elif line.startswith("+"):
             t.append(line + "\n", style="green")

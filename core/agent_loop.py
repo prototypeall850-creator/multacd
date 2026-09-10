@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from core.config import Config
 from core.llm_client import LLMClient, LLMError, StreamDone, StreamText, setup_client
@@ -31,7 +31,6 @@ from core.permissions import PermissionChecker
 from memory.context import ConversationContext
 from tools.common import fail
 from tools.registry import execute_tool, get_tool_definitions
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.mode_manager import ModeManager

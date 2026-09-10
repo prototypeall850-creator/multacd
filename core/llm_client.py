@@ -20,8 +20,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
+from typing import Any
 
 import litellm
 from litellm import (
@@ -311,14 +312,14 @@ async def _self_test() -> None:
         calls["n"] += 1
         raise APIConnectionError("down", "x", "x")
 
-    with patch("core.llm_client.litellm.acompletion", side_effect=_flaky):
-        with patch("core.llm_client.asyncio.sleep", return_value=None):
-            try:
-                await _drain(client)
-            except LLMError as e:
-                assert "Gagal konek" in str(e), e
-            else:
-                raise AssertionError("conn error harus jadi LLMError")
+    with (patch("core.llm_client.litellm.acompletion", side_effect=_flaky),
+          patch("core.llm_client.asyncio.sleep", return_value=None)):
+        try:
+            await _drain(client)
+        except LLMError as e:
+            assert "Gagal konek" in str(e), e
+        else:
+            raise AssertionError("conn error harus jadi LLMError")
     assert calls["n"] == MAX_CONNECTION_RETRIES + 1, calls
 
     print("✅ llm_client self-test OK (akumulasi + error mapping + retry)")

@@ -52,15 +52,15 @@ ENTRY_CANDIDATES = ("main.py", "app.py", "run.py", "index.py")
 
 def _is_planning_file(name: str) -> bool:
     upper = name.upper()
-    return upper == "PLAN.MD" or upper.startswith("PLAN-") or upper.startswith("PLAN_") \
-        or upper == "ROADMAP.MD" or upper.startswith("ROADMAP-") or upper.startswith("ROADMAP_")
+    return (upper in ("PLAN.MD", "ROADMAP.MD")
+            or upper.startswith(("PLAN-", "PLAN_", "ROADMAP-", "ROADMAP_")))
 
 
 def detect_project_type(root: Path | str) -> str:
     """Tebak jenis project dari file signature di root."""
     root = Path(root)
-    if list(root.glob("requirements.txt")) or list(root.glob("pyproject.toml")) \
-            or list(root.glob("setup.py")) or list(root.glob("setup.cfg")):
+    if any((root / f).is_file()
+           for f in ("requirements.txt", "pyproject.toml", "setup.py", "setup.cfg")):
         return "Python"
     if (root / "package.json").is_file():
         return "Node.js"
@@ -82,7 +82,7 @@ def _gitignore_names(root: Path) -> set[str]:
         return names
     for line in text.splitlines():
         line = line.strip()
-        if not line or line.startswith("#") or line.startswith("!"):
+        if not line or line.startswith(("#", "!")):
             continue
         line = line.strip("/").split("/")[0]
         if line and "*" not in line:
@@ -196,7 +196,7 @@ def _parse_dependencies(key_files: dict[str, str]) -> str:
     names: list[str] = []
     for line in req.splitlines():
         line = line.strip()
-        if not line or line.startswith("#") or line.startswith("-"):
+        if not line or line.startswith(("#", "-")):
             continue
         for sep in ("==", ">=", "<=", "~=", "!=", ">", "<", ";", "["):
             line = line.split(sep)[0]

@@ -1,0 +1,21 @@
+# Tool config untuk multacd (runtime deps tetap di requirements.txt).
+
+[tool.ruff]
+line-length = 120  # style de facto codebase (baris terpanjang ~119)
+target-version = "py310"
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+# Selection eksplisit — ruff 0.16+ menyalakan semua rule by default,
+# banyak yang false-positive untuk pola project ini (subprocess.run tanpa
+# check= itu disengaja, return code dicek manual; blind except = fallback
+# anti-crash yang disengaja).
+select = ["E", "F", "W", "I", "UP", "SIM", "PIE", "RUF", "EXE"]
+
+[tool.ruff.lint.per-file-ignores]
+# BINDINGS/CSS adalah atribut class pola framework Textual, bukan bug.
+"tui/app.py" = ["RUF012"]
+"tui/screens/main_screen.py" = ["RUF012"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

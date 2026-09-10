@@ -8,10 +8,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from core.permissions import KNOWN_TOOLS
-
 from tools.agent.ask import SCHEMA as ASK_SCHEMA
 from tools.agent.ask import ask
 from tools.agent.skill import SCHEMA as SKILL_SCHEMA
@@ -20,14 +20,15 @@ from tools.agent.task import SCHEMA as TASK_SCHEMA
 from tools.agent.task import task
 from tools.agent.todo_write import SCHEMA as TODO_WRITE_SCHEMA
 from tools.agent.todo_write import todo_write
-from tools.codebase.scan_codebase import SCHEMA as SCAN_CODEBASE_SCHEMA
-from tools.codebase.scan_codebase import scan_codebase
 from tools.code.lint_python import SCHEMA as LINT_PYTHON_SCHEMA
 from tools.code.lint_python import lint_python
 from tools.code.run_python import SCHEMA as RUN_PYTHON_SCHEMA
 from tools.code.run_python import run_python
 from tools.code.run_tests import SCHEMA as RUN_TESTS_SCHEMA
 from tools.code.run_tests import run_tests
+from tools.codebase.scan_codebase import SCHEMA as SCAN_CODEBASE_SCHEMA
+from tools.codebase.scan_codebase import scan_codebase
+from tools.common import fail
 from tools.filesystem.apply_patch import SCHEMA as APPLY_PATCH_SCHEMA
 from tools.filesystem.apply_patch import apply_patch
 from tools.filesystem.delete_file import SCHEMA as DELETE_FILE_SCHEMA
@@ -80,7 +81,6 @@ from tools.shell.bash import SCHEMA as BASH_SCHEMA
 from tools.shell.bash import bash
 from tools.web.web_fetch import SCHEMA as WEB_FETCH_SCHEMA
 from tools.web.web_fetch import web_fetch
-from tools.common import fail
 
 ToolFunc = Callable[..., dict[str, Any]]
 
