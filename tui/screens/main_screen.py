@@ -57,7 +57,7 @@ class MainScreen(Screen):
     def on_mount(self) -> None:
         bar = self.query_one(StatusBar)
         bar.set_model(self.app.cfg.model)
-        bar.set_mode("coding")
+        bar.set_mode(self.app.mode_manager.get_mode())
         bar.set_status("idle")
         self.query_one(InputBar).focus()
         self.run_worker(self._show_welcome())
@@ -67,8 +67,17 @@ class MainScreen(Screen):
         await chat.add_info(
             f"⚡ Selamat datang di multacd v{self.app.version} — model: {self.app.cfg.model}\n"
             "Ketik pesan lalu Enter untuk kirim · Shift+Enter untuk newline · Ctrl+C keluar.\n"
-            "Tool baca & git langsung jalan; tulis/shell/web minta izin [Y/N/A] dulu."
+            "Tool baca & git langsung jalan; tulis/shell/web minta izin [Y/N/A] dulu.\n"
+            "Ketik /help buat daftar command."
         )
+
+    def _sync_mode_ui(self) -> None:
+        """Samakan status bar + composer dengan mode/model aktif."""
+        mm = self.app.mode_manager
+        bar = self.query_one(StatusBar)
+        bar.set_mode(mm.get_mode())
+        bar.set_model(self.app.cfg.model)
+        self.app.composer.update_mode(mm.get_mode_prompt())
 
     async def on_input_submitted(self, event: InputSubmitted) -> None:
         if self._turn_running:
@@ -83,6 +92,11 @@ class MainScreen(Screen):
         try:
             inbar.set_busy(True)
             bar.set_status("thinking")
+            # /clear: bersihkan UI dulu biar command + respons tetap kelihatan.
+            # (Single source of truth parsing tetap ModeManager di agent_loop.)
+            stripped = text.strip().lower()
+            if stripped == "/clear" or stripped.startswith("/clear "):
+                await chat.clear()
             await chat.add_user(text)
             await chat.start_assistant()
             async for event in run_agent(
@@ -92,6 +106,7 @@ class MainScreen(Screen):
                 llm_client=self.app.llm_client,
                 confirm=self._confirm,
                 ask_user=self._ask_user,
+                mode_manager=self.app.mode_manager,
             ):
                 if isinstance(event, AgentText):
                     await chat.append_assistant_text(event.delta)
@@ -104,6 +119,7 @@ class MainScreen(Screen):
                 elif isinstance(event, AgentError):
                     await chat.add_error(event.message)
         finally:
+            self._sync_mode_ui()
             bar.set_status("idle")
             inbar.set_busy(False)
             inbar.focus()

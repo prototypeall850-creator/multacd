@@ -71,6 +71,14 @@ class ChatPanel(VerticalScroll):
         mark = "✅" if success else "❌"
         row.update(f"🔧 [bold]{name}[/bold] ····· {mark}")
 
+    async def clear(self) -> None:
+        """Kosongkan semua bubble (dipakai /clear) + reset state streaming."""
+        for child in list(self.children):
+            await child.remove()
+        self._assistant_md = None
+        self._assistant_text = ""
+        self._tool_rows.clear()
+
     def render_markdown_text(self, text: str) -> RichMarkdown:
         """Helper (dipakai test): pastikan teks valid buat Rich Markdown."""
         return RichMarkdown(text)

@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import App
 
 from core.config import Config
 from core.llm_client import LLMClient
+from core.mode_manager import ModeManager
+from core.prompt_composer import PromptComposer, load_soul
 from memory.context import ConversationContext
 from tui.screens.main_screen import MainScreen
 
 APP_VERSION = "0.0.0-beta"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 class MultacdApp(App[None]):
@@ -29,6 +34,11 @@ class MultacdApp(App[None]):
         self.version = version
         self.main_screen: MainScreen | None = None
         self._quit_armed = False
+        # Mode + prompt composer (soul di-load sekali saat startup).
+        soul = load_soul(project_dir=_PROJECT_ROOT)
+        self.mode_manager = ModeManager(config, soul=soul)
+        self.composer = PromptComposer(soul=soul)
+        self.composer.update_mode(self.mode_manager.get_mode_prompt())
 
     def on_mount(self) -> None:
         screen = MainScreen()

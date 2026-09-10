@@ -31,6 +31,10 @@ from core.permissions import PermissionChecker
 from memory.context import ConversationContext
 from tools.common import fail
 from tools.registry import execute_tool, get_tool_definitions
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.mode_manager import ModeManager
 
 SYSTEM_PROMPT = (
     "Kamu multacd, coding agent di terminal. Jawab dengan bahasa yang dipakai user "
@@ -106,8 +110,19 @@ async def run_agent(
     llm_client: LLMClient | None = None,
     confirm: ConfirmCallback | None = None,
     ask_user: AskCallback | None = None,
+    mode_manager: ModeManager | None = None,
 ) -> AsyncIterator[AgentEvent]:
     """Jalankan satu turn agent. Yield AgentEvent secara real-time."""
+    # ── Slash command: intercept sebelum LLM, tidak masuk history ──
+    if mode_manager is not None and mode_manager.is_command(user_input):
+        result = mode_manager.handle_command(user_input)
+        if result.action == "clear":
+            context.clear()
+            context.add_message("system", SYSTEM_PROMPT)
+        yield AgentText(result.message)
+        yield AgentDone(result.message)
+        return
+
     llm = llm_client or setup_client(config)
     checker = PermissionChecker(config)
     confirm_cb = confirm or _stdin_confirm
@@ -300,7 +315,32 @@ if __name__ == "__main__":
         assert events[1].success is True
         assert "budi" in ctx.get_messages()[-2]["content"]
 
-        print("✅ agent_loop self-test OK (7 skenario)")
+        # 8. Slash command dicegat — LLM tidak dipanggil, history bersih
+        from core.mode_manager import ModeManager as _MM
+        cfg_cmd = Config(model="m", api_key="k")
+        mm = _MM(config=cfg_cmd)
+        fake_empty = FakeLLM([])  # script kosong → error kalau LLM dipanggil
+        ctx = ConversationContext()
+        events = await _drain(run_agent("/help", ctx, cfg_cmd,
+                                        llm_client=fake_empty, mode_manager=mm))
+        assert isinstance(events[-1], AgentDone) and "/code" in events[-1].text
+        assert ctx.get_messages() == [], ctx.get_messages()  # command tak masuk history
+        # /clear mengosongkan history lalu isi ulang system prompt
+        ctx.add_message("user", "x")
+        events = await _drain(run_agent("/clear", ctx, cfg_cmd,
+                                        llm_client=fake_empty, mode_manager=mm))
+        assert [m["role"] for m in ctx.get_messages()] == ["system"]
+        # /model ganti model on-the-fly
+        events = await _drain(run_agent("/model openai/gpt-4o", ctx, cfg_cmd,
+                                        llm_client=fake_empty, mode_manager=mm))
+        assert cfg_cmd.model == "openai/gpt-4o" and "gpt-4o" in events[-1].text
+        # bukan command → tetap ke LLM seperti biasa
+        fake2 = FakeLLM([StreamDone("ok", [])])
+        events = await _drain(run_agent("halo", ctx, cfg_cmd,
+                                        llm_client=fake2, mode_manager=mm))
+        assert isinstance(events[-1], AgentDone) and "ok" in events[-1].text
+
+        print("✅ agent_loop self-test OK (8 skenario)")
 
     async def _no_confirm(name, params):
         raise AssertionError(f"tidak boleh minta konfirmasi untuk {name}")
