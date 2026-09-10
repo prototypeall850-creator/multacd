@@ -74,7 +74,7 @@ WEB_TOOLS = frozenset({"web_fetch", "web_scrape"})
 SEARCH_TOOLS = frozenset({"web_search"})
 
 # ── Research (ASK: akses internet + bakar token LLM) ──
-RESEARCH_TOOLS = frozenset({"quick_research", "deep_research"})
+RESEARCH_TOOLS = frozenset({"quick_research", "deep_research", "export_research"})
 
 # ── Code execution (jalankan kode → selalu konfirmasi, tanpa override config) ──
 CODE_TOOLS = frozenset({
