@@ -9,7 +9,7 @@
 | Phase | Nama | Status |
 |---|---|---|
 | Phase 1 | Foundation | ✅ Selesai |
-| Phase 2 | Coding Agent | 🔨 In Progress |
+| Phase 2 | Coding Agent | ✅ Selesai |
 | Phase 3 | Research Agent | 📋 Planned |
 | Phase 4 | Personal Agent | 📋 Planned |
 | Phase 5 | Polish & Distribution | 📋 Planned |
@@ -34,35 +34,37 @@ Deliverable:
 
 ---
 
-## Phase 2 — Coding Agent 🔨
+## Phase 2 — Coding Agent ✅
 
 **Tujuan:** multacd jadi AI coding partner yang ngerti project kamu.
 
 ```
 Deliverable:
-  [ ] Codebase awareness (auto-scan saat startup)
-  [ ] Deteksi jenis project (Python, Node, dll)
-  [ ] Code execution — Python (run, capture output, timeout)
-  [ ] Linting — ruff (check + auto-fix)
-  [ ] Testing — pytest (run all / run specific)
-  [ ] Smart Git Flow:
+  ✅ Codebase awareness (auto-scan saat startup)
+  ✅ Deteksi jenis project (Python, Node, dll)
+  ✅ Code execution — Python (run, capture output, timeout)
+     ⏳ streaming output real-time → issue #3
+  ✅ Linting — ruff (check + auto-fix)
+  ✅ Testing — pytest (run all / run specific)
+  ✅ Smart Git Flow:
         auto git_status saat startup
-        LLM generate conventional commit message
-        diff preview sebelum commit
-        branch protection untuk main/master
-        AI-assisted merge conflict resolution
-  [ ] Mode switching (/code, /research, /personal, /clear, /model)
-  [ ] TUI enhancement:
+        LLM generate conventional commit message (prompt-driven)
+        ⏳ diff preview + dialog approve sebelum commit → issue #4
+        branch protection untuk main/master (tool-level)
+        AI-assisted merge conflict resolution (tool + prompt)
+  ✅ Mode switching (/code, /research, /personal, /clear, /scan, /model, /help, /soul)
+  ✅ TUI enhancement:
         file tree panel (toggle Ctrl+T)
         git status di status bar (branch + changed files)
-        diff viewer dengan syntax highlight
-        progress indicator saat scan codebase
+        diff viewer dengan syntax highlight (toggle Ctrl+G)
+        ⏳ progress indicator live saat scan/test → issue #3
 
-Tools baru di Phase 2:
+Tools baru di Phase 2 (29 → 34):
   run_python     jalankan file Python atau snippet
   lint_python    lint dengan ruff, tampilkan error per baris
   run_tests      jalankan pytest, tampilkan hasil per test
   scan_codebase  scan & generate project context
+  git_merge      merge + lapor conflict ours-vs-theirs
 ```
 
 **Estimasi kompleksitas:** Sedang — tools baru tapi pattern sama dengan Phase 1.
@@ -219,8 +221,9 @@ Deliverable:
 Phase 1 (sudah install):
   textual, litellm, pyyaml, pydantic, httpx
 
-Phase 2 (tambahan):
-  ruff, pytest, gitpython
+Phase 2 (tambahan, sudah install):
+  ruff, pytest
+  (gitpython TIDAK jadi dipakai — git via subprocess, tanpa dep baru)
 
 Phase 3 (tambahan):
   beautifulsoup4, markdownify

@@ -3,7 +3,8 @@
 Agentic TUI: **Coding Agent + Research Agent + Personal Agent** dalam satu terminal.
 Satu config BYOK (Bring Your Own Key) untuk 100+ LLM provider via LiteLLM.
 
-> Phase 1 (pondasi) — ✅ selesai. Lihat `PLAN.md` untuk roadmap Phase 2–4.
+> Phase 1 (pondasi) — ✅ selesai. Phase 2 (Coding Agent) — ✅ selesai.
+> Lihat `plan/` untuk detail per phase dan `roadmap/ROADMAP.md` untuk arah besar.
 
 ---
 
@@ -86,9 +87,12 @@ python main.py --version                        # tampilkan versi
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  ⚡ multacd  ·  💻 coding  ·  model  ·  ● status         │  ← Status Bar
-├─────────────────────────────────────────────────────────┤
-│  percakapan + hasil tool (scrollable)                   │  ← Chat Panel
+│  ⚡ multacd  ·  💻 code  ·  model  ·  📍 main  ·  ● status │  ← Status Bar
+├──────────────┬──────────────────────────────────────────┤
+│ 📁 tree      │  percakapan + hasil tool (scrollable)    │  ← Chat (+Tree)
+│ (Ctrl+T)     │                                          │
+├──────────────┴──────────────────────────────────────────┤
+│  git diff (Ctrl+G, saat ditampilkan)                    │  ← Diff Viewer
 ├─────────────────────────────────────────────────────────┤
 │  ❯ ketik di sini…                                       │  ← Input Bar
 └─────────────────────────────────────────────────────────┘
@@ -102,24 +106,45 @@ python main.py --version                        # tampilkan versi
 | Izinkan tool | `Y` |
 | Tolak tool | `N` |
 | Izinkan tool itu sampai sesi habis | `A` |
+| File tree (pilih file → auto-baca) | `Ctrl+T` |
+| Git diff viewer | `Ctrl+G` |
+
+Slash command (ketik di input, tanpa panggil LLM):
+
+| Command | Fungsi |
+|---|---|
+| `/code` | Mode Coding Agent (default) |
+| `/research`, `/personal` | Placeholder Phase 3/4 |
+| `/clear` | Bersihkan history |
+| `/scan` | Scan ulang codebase |
+| `/model [nama]` | Lihat / ganti model |
+| `/soul` | Lihat kepribadian aktif |
+| `/help` | Daftar command |
 
 Perilaku tool:
 
 - **Langsung jalan** (tanpa tanya): baca file/folder, `glob`, `grep`,
-  semua perintah git, ingatan (`remember`/`recall`/`forget`), `todo`, `skill`.
+  `scan_codebase`, `lint_python` (tanpa fix), semua perintah git
+  (kecuali push ke branch utama), ingatan, `todo`, `skill`.
 - **Minta izin dulu** (popup Y/N/A): tulis/edit/hapus/pindah file,
-  `bash`, `web_fetch`.
+  `bash`, `web_fetch`, `run_python`, `run_tests`,
+  `lint_python` dengan fix, push ke `main`/`master`/….
 
 ## Struktur project
 
 ```
 multacd/
 ├── main.py            ← entry point
-├── core/              ← config, llm_client (LiteLLM), agent_loop, permissions
-├── tools/             ← filesystem, shell, git, memory, agent, web + registry
-├── tui/               ← app, screens, widgets (Textual)
+├── core/              ← config, llm_client, agent_loop, permissions,
+│                        mode_manager, codebase, prompt_composer
+├── tools/             ← filesystem, shell, git, memory, agent, web,
+│                        code (run_python/lint_python/run_tests),
+│                        codebase (scan_codebase) + registry
+├── tui/               ← app, screens, widgets (tree, diff, dialog)
 ├── memory/            ← context (short-term) + store SQLite (long-term)
-└── PLAN.md            ← panduan arah project
+├── soul.md            ← kepribadian agent (override: ~/.multacd/soul.md)
+├── plan/              ← spec per phase
+└── roadmap/           ← arah besar semua phase
 ```
 
 Data personal (config, `memory.db`, skills) tersimpan di `~/.multacd/`
@@ -138,6 +163,7 @@ Data personal (config, `memory.db`, skills) tersimpan di `~/.multacd/`
 
 ## Roadmap
 
-- **Phase 2** — Coding Agent penuh (codebase awareness, test, lint, sub-agent `task`)
+- **Phase 1** — Foundation ✅ (config BYOK, ReAct loop, 29 tools, TUI)
+- **Phase 2** — Coding Agent ✅ (scan codebase, run/lint/test, smart git, 34 tools)
 - **Phase 3** — Research Agent (web search API, deep research ala Perplexity)
 - **Phase 4** — Personal Agent (Telegram/WA gateway, scheduler, briefing harian)
