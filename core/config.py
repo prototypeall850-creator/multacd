@@ -63,9 +63,12 @@ ask_before_bash: true        # bash → konfirmasi dulu
 ask_before_web: true         # web_fetch → konfirmasi dulu
 
 # ── Display Settings ─────────────────────────────────
-theme: "dark"                # dark | light
+theme: "dark"                # dark | light | catppuccin-mocha | catppuccin-latte
+                             # | catppuccin-frappe | catppuccin-macchiato
+                             # (dark/light = alias mocha/latte)
 show_tool_calls: true        # tampilkan nama tool yang dijalankan
 show_thinking: false         # tampilkan reasoning LLM (verbose mode)
+icon_style: "auto"           # auto | nerdfonts | unicode | ascii
 
 # ── Search Provider (BYOK, Phase 3) ────────────────────
 search_provider: "tavily"    # tavily | exa | brave | serpapi | duckduckgo
@@ -103,9 +106,11 @@ class Config(BaseModel):
     ask_before_web: bool = True
 
     # ── Display settings ──
-    theme: Literal["dark", "light"] = "dark"
+    theme: Literal["dark", "light", "catppuccin-mocha", "catppuccin-latte",
+                   "catppuccin-frappe", "catppuccin-macchiato"] = "dark"
     show_tool_calls: bool = True
     show_thinking: bool = False
+    icon_style: Literal["auto", "nerdfonts", "unicode", "ascii"] = "auto"
 
     # ── Search provider (BYOK, Phase 3) ──
     search_provider: Literal["tavily", "exa", "brave", "serpapi", "duckduckgo"] = "tavily"
@@ -125,6 +130,13 @@ class Config(BaseModel):
     @classmethod
     def _norm_provider(cls, v: object) -> object:
         # "Tavily", " TAVILY " → "tavily" (maafkan kapital/spasi user).
+        return v.lower().strip() if isinstance(v, str) else v
+
+    @field_validator("theme", mode="before")
+    @classmethod
+    def _norm_theme(cls, v: object) -> object:
+        # "Dark", " MOCHA " → canonical ("dark", "mocha" bukan nama penuh
+        # tetap ditolak pydantic dengan pesan jelas — cuma maafkan case).
         return v.lower().strip() if isinstance(v, str) else v
 
 

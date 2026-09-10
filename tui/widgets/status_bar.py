@@ -5,9 +5,12 @@ from __future__ import annotations
 from rich.text import Text
 from textual.widgets import Static
 
+from tui import icons
+
 
 class StatusBar(Static):
-    """Contoh: ⚡ multacd  ·  💻 coding  ·  groq/llama-3.3  ·  ● idle"""
+    """Contoh: ⚡ multacd  ·  💻 coding  ·  groq/llama-3.3  ·  ● idle
+    (glyph via tui.icons — ikut level nerdfonts/unicode/ascii)."""
 
     def __init__(self) -> None:
         super().__init__("", id="status-bar")
@@ -33,13 +36,13 @@ class StatusBar(Static):
     def set_git(self, summary: dict) -> None:
         """Tampilkan branch + file berubah. Bukan repo → 'no git'."""
         if not summary.get("is_repo"):
-            self._git = "📍 no git"
+            self._git = f"{icons.icon('branch')} no git"
         else:
-            parts = [f"📍 {summary.get('branch', '?')}"]
+            parts = [f"{icons.icon('branch')} {summary.get('branch', '?')}"]
             if summary.get("modified"):
-                parts.append(f"+{summary['modified']}")
+                parts.append(f"{icons.icon('modified')}{summary['modified']}")
             if summary.get("untracked"):
-                parts.append(f"~{summary['untracked']}")
+                parts.append(f"{icons.icon('added')}{summary['untracked']}")
             self._git = " ".join(parts)
         self._refresh()
 
@@ -51,8 +54,8 @@ class StatusBar(Static):
             self._mode, "bold"
         )
         t = Text()
-        t.append("⚡ multacd", style="bold cyan")
-        t.append("  ·  💻 ", style="dim")
+        t.append(f"{icons.icon('app')} multacd", style="bold cyan")
+        t.append(f"  ·  {icons.icon('mode')} ", style="dim")
         t.append(self._mode, style=mode_color)
         t.append("  ·  ", style="dim")
         t.append(self._model, style="magenta")
@@ -60,6 +63,8 @@ class StatusBar(Static):
             t.append("  ·  ", style="dim")
             t.append(self._git, style="yellow")
         t.append("  ·  ", style="dim")
-        t.append("● ", style=f"bold {dot_color}")
+        dot = {"idle": icons.icon("success"), "thinking": icons.icon("pending"),
+               "waiting": icons.icon("warning")}.get(self._status, "●")
+        t.append(f"{dot} ", style=f"bold {dot_color}")
         t.append(self._status, style=dot_color)
         self.update(t)

@@ -1,0 +1,133 @@
+"""Catppuccin themes buat multacd (lihat DESIGN.md §2).
+
+Default: catppuccin-mocha (dark). Varian: latte (light), frappe,
+macchiato. Palette per DESIGN.md — slot Textual Theme + variables
+tambahan (peach/teal/sapphire/lavender/overlay/subtext) yang dipakai
+widget via var(--peach) dll.
+
+Test cepat:
+    python -m tui.themes.catppuccin
+"""
+
+from __future__ import annotations
+
+from textual.theme import Theme
+
+MOCHA = Theme(
+    name="catppuccin-mocha",
+    dark=True,
+    primary="#89b4fa",      # Blue — info, link
+    secondary="#94e2d5",    # Teal — git new
+    accent="#cba6f7",       # Mauve — accent, /personal
+    foreground="#cdd6f4",   # Text
+    background="#1e1e2e",   # Base
+    surface="#313244",      # Surface 0
+    panel="#181825",        # Mantle
+    success="#a6e3a1",      # Green
+    warning="#f9e2af",      # Yellow
+    error="#f38ba8",        # Red
+    boost="#45475a",        # Surface 1 — hover/selected
+    variables={
+        "subtext": "#a6adc8",
+        "overlay": "#7f849c",
+        "peach": "#fab387",      # git modified
+        "teal": "#94e2d5",       # git new
+        "sapphire": "#74c7ec",   # tool running
+        "lavender": "#b4befe",   # highlight
+        "success-dim": "#585b70",
+    },
+)
+
+LATTE = Theme(
+    name="catppuccin-latte",
+    dark=False,
+    primary="#1e66f5",
+    secondary="#179299",
+    accent="#8839ef",
+    foreground="#4c4f69",
+    background="#eff1f5",
+    surface="#ccd0da",
+    panel="#e6e9ef",
+    success="#40a02b",
+    warning="#df8e1d",
+    error="#d20f39",
+    boost="#bcc0cc",
+    variables={
+        "subtext": "#6c6f85",
+        "overlay": "#9ca0b0",
+        "peach": "#fe640b",
+        "teal": "#179299",
+        "sapphire": "#209fb5",
+        "lavender": "#7287fd",
+        "success-dim": "#acb0be",
+    },
+)
+
+FRAPPE = Theme(
+    name="catppuccin-frappe",
+    dark=True,
+    primary="#8caaee",
+    secondary="#81c8be",
+    accent="#ca9ee6",
+    foreground="#c6d0f5",
+    background="#303446",
+    surface="#414559",
+    panel="#292c3c",
+    success="#a6d189",
+    warning="#e5c890",
+    error="#e78284",
+    boost="#51576d",
+    variables={
+        "subtext": "#a5adce",
+        "overlay": "#838ba7",
+        "peach": "#ef9f76",
+        "teal": "#81c8be",
+        "sapphire": "#85c1dc",
+        "lavender": "#babbf1",
+        "success-dim": "#626880",
+    },
+)
+
+MACCHIATO = Theme(
+    name="catppuccin-macchiato",
+    dark=True,
+    primary="#8aadf4",
+    secondary="#8bd5ca",
+    accent="#c6a0f6",
+    foreground="#cad3f5",
+    background="#24273a",
+    surface="#363a4f",
+    panel="#1e2030",
+    success="#a6da95",
+    warning="#eed49f",
+    error="#ed8796",
+    boost="#494d64",
+    variables={
+        "subtext": "#a5adcb",
+        "overlay": "#8087a2",
+        "peach": "#f5a97f",
+        "teal": "#8bd5ca",
+        "sapphire": "#7dc4e4",
+        "lavender": "#b7bdf8",
+        "success-dim": "#5b6078",
+    },
+)
+
+THEMES = (MOCHA, LATTE, FRAPPE, MACCHIATO)
+DEFAULT_THEME = "catppuccin-mocha"
+
+# Alias kompatibel config lama (dark/light era Phase 2).
+THEME_ALIASES = {
+    "dark": "catppuccin-mocha",
+    "light": "catppuccin-latte",
+}
+
+
+def resolve_theme_name(name: str) -> str:
+    """'dark' → 'catppuccin-mocha', dst. Tidak dikenal → default."""
+    name = (name or "").lower().strip()
+    if name in THEME_ALIASES:
+        return THEME_ALIASES[name]
+    if any(t.name == name for t in THEMES):
+        return name
+    return DEFAULT_THEME
