@@ -77,6 +77,8 @@ from tools.memory.recall import SCHEMA as RECALL_SCHEMA
 from tools.memory.recall import recall
 from tools.memory.remember import SCHEMA as REMEMBER_SCHEMA
 from tools.memory.remember import remember
+from tools.research.deep_research import SCHEMA as DEEP_RESEARCH_SCHEMA
+from tools.research.deep_research import deep_research
 from tools.research.quick_research import SCHEMA as QUICK_RESEARCH_SCHEMA
 from tools.research.quick_research import quick_research
 from tools.research.web_scrape import SCHEMA as WEB_SCRAPE_SCHEMA
@@ -138,6 +140,7 @@ TOOL_REGISTRY: dict[str, tuple[ToolFunc, dict[str, Any]]] = {
     # research
     "web_search": (web_search, WEB_SEARCH_SCHEMA),
     "quick_research": (quick_research, QUICK_RESEARCH_SCHEMA),
+    "deep_research": (deep_research, DEEP_RESEARCH_SCHEMA),
 }
 
 # Fail-fast: registry dan permission harus 1:1. Kalau tidak sama,
@@ -180,7 +183,7 @@ if __name__ == "__main__":
     os.environ["MULTACD_HOME"] = tmp_home
 
     defs = get_tool_definitions()
-    assert len(defs) == len(KNOWN_TOOLS) == 37, len(defs)
+    assert len(defs) == len(KNOWN_TOOLS) == 38, len(defs)
     for d in defs:
         assert d["type"] == "function" and d["function"]["name"], d
 
