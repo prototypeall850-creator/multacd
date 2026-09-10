@@ -14,7 +14,9 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, ValidationError
 
-CONFIG_DIR = Path.home() / ".multacd"
+# Hormati MULTACD_HOME (isolation test) — konsisten dengan memory/store.py
+# dan tools/agent/skill.py. Dievaluasi saat import; test set env sebelum subprocess.
+CONFIG_DIR = Path(os.environ.get("MULTACD_HOME", str(Path.home()))) / ".multacd"
 DEFAULT_CONFIG_PATH = CONFIG_DIR / "config.yaml"
 ENV_CONFIG_OVERRIDE = "MULTACD_CONFIG"
 
