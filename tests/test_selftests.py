@@ -43,6 +43,7 @@ SELF_TEST_MODULES = [
     "tools.research.web_search",
     "core.research.query_generator",
     "core.research.orchestrator",
+    "core.research.bus",
     "tools.research.quick_research",
     "tools.research.deep_research",
     "tools.research.export_research",

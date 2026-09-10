@@ -140,7 +140,8 @@ async def quick_research(
     sources.sort(key=lambda r: r.score, reverse=True)
     sources = sources[:max_sources]
     _emit({"type": "sources",
-           "sources": [{"url": s.url, "title": s.title, "status": "searching"}
+           "sources": [{"url": s.url, "title": s.title, "status": "searching",
+                        "preview": (s.content or s.snippet or "")[:600]}
                        for s in sources]})
 
     if not sources:
@@ -160,7 +161,8 @@ async def quick_research(
         s.content = content
         s.scraped = src == "scraped"
         s.scrape_failed = src == "failed"
-        _emit({"type": "source", "url": s.url, "status": src})
+        _emit({"type": "source", "url": s.url, "status": src,
+               "preview": (content or s.snippet or "")[:600]})
 
     await asyncio.gather(*[_scrape_one(s) for s in sources])
 
@@ -253,7 +255,8 @@ async def _scrape_new(sources: list[SearchResult], scrape_fn: Callable,
     """Scrape sumber yang belum punya konten (parallel)."""
     async def _one(s: SearchResult) -> None:
         if s.scraped and s.content:
-            emit({"type": "source", "url": s.url, "status": "scraped"})
+            emit({"type": "source", "url": s.url, "status": "scraped",
+                  "preview": (s.content or "")[:600]})
             return
         try:
             content, src = await asyncio.to_thread(scrape_fn, s.url, s.snippet)
@@ -262,7 +265,8 @@ async def _scrape_new(sources: list[SearchResult], scrape_fn: Callable,
         s.content = content
         s.scraped = src == "scraped"
         s.scrape_failed = src == "failed"
-        emit({"type": "source", "url": s.url, "status": src})
+        emit({"type": "source", "url": s.url, "status": src,
+              "preview": (content or s.snippet or "")[:600]})
 
     await asyncio.gather(*[_one(s) for s in sources])
 
@@ -355,7 +359,9 @@ async def deep_research(
         # 3. Scrape + update panel
         _emit({"type": "sources", "round": rnd,
                "sources": [{"url": s.url, "title": s.title,
-                            "status": "searching"} for s in fresh]})
+                            "status": "searching",
+                            "preview": (s.content or s.snippet or "")[:600]}
+                           for s in fresh]})
         await _scrape_new(fresh, scrape_fn, _emit)
         all_sources.extend(fresh)
 

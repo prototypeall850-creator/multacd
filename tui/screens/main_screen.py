@@ -18,11 +18,17 @@ from core.agent_loop import (
     run_agent,
 )
 from core.codebase import get_git_summary
+from core.research.bus import set_research_sink
 from tui.widgets.chat_panel import ChatPanel
 from tui.widgets.confirm_dialog import AskDialog, ConfirmDialog
 from tui.widgets.diff_viewer import DiffViewer
 from tui.widgets.file_tree import FileOpenRequested, ProjectTree, modified_files
 from tui.widgets.input_bar import InputBar, InputSubmitted
+from tui.widgets.sources_panel import (
+    ExportResearchRequested,
+    SourcePreviewRequested,
+    SourcesPanel,
+)
 from tui.widgets.status_bar import StatusBar
 
 
@@ -32,6 +38,7 @@ class MainScreen(Screen):
     BINDINGS = [
         ("ctrl+t", "toggle_tree", "File tree"),
         ("ctrl+g", "toggle_diff", "Diff"),
+        ("ctrl+r", "toggle_sources", "Sources"),
     ]
 
     CSS = """
@@ -53,6 +60,13 @@ class MainScreen(Screen):
     }
     #chat-panel {
         height: 1fr;
+        padding: 0 1;
+    }
+    #sources-panel {
+        width: 30%;
+        min-width: 28;
+        display: none;
+        border-left: solid $primary;
         padding: 0 1;
     }
     #diff-viewer {
@@ -79,6 +93,7 @@ class MainScreen(Screen):
         with Horizontal(id="body"):
             yield ProjectTree(self.app.workdir)
             yield ChatPanel()
+            yield SourcesPanel()
         yield DiffViewer()
         yield InputBar()
 
@@ -114,7 +129,8 @@ class MainScreen(Screen):
             f"📁 {self.app.project_label}\n"
             "Ketik pesan lalu Enter untuk kirim · Shift+Enter untuk newline · Ctrl+C keluar.\n"
             "Tool baca & git langsung jalan; tulis/shell/web minta izin [Y/N/A] dulu.\n"
-            "Ketik /help buat daftar command · Ctrl+T file tree · Ctrl+G diff."
+            "Ketik /help buat daftar command · Ctrl+T file tree · Ctrl+G diff.\n"
+            "Mode riset: /research lalu tanya apa saja · Ctrl+R panel sumber."
         )
 
     def _sync_mode_ui(self) -> None:
@@ -125,6 +141,10 @@ class MainScreen(Screen):
         bar.set_model(self.app.cfg.model)
         bar.set_git(self.app.git_summary)
         self.app.composer.update_mode(mm.get_mode_prompt())
+        # Keluar /research → sembunyikan panel sumber (lihat PLAN-phase3 §10).
+        panel = self.query_one(SourcesPanel)
+        if mm.get_mode() != "research":
+            panel.display = False
         # Tandai ulang file modified kalau tree sedang tampil.
         tree = self.query_one(ProjectTree)
         if tree.display:
@@ -156,6 +176,30 @@ class MainScreen(Screen):
             tree.mark_modified(modified_files(self.app.workdir))
             tree.focus()
 
+    def action_toggle_sources(self) -> None:
+        """Ctrl+R: tampil/sembunyi Sources Panel (mode /research)."""
+        panel = self.query_one(SourcesPanel)
+        if panel.display:
+            panel.display = False
+            self.query_one(InputBar).focus()
+        else:
+            panel.display = True
+
+    async def on_source_preview_requested(
+        self, event: SourcePreviewRequested
+    ) -> None:
+        """Klik sumber di panel → tampilkan preview di chat."""
+        chat = self.query_one(ChatPanel)
+        preview = self.query_one(SourcesPanel).get_preview(event.url)
+        await chat.add_info(preview)
+
+    async def on_export_research_requested(
+        self, event: ExportResearchRequested
+    ) -> None:
+        """Tombol Export → minta agent simpan hasil research terakhir."""
+        _ = event
+        self._submit("Export hasil research di atas ke file .md.")
+
     def action_toggle_diff(self) -> None:
         """Ctrl+G: tampil/sembunyi git diff workdir.
 
@@ -183,6 +227,11 @@ class MainScreen(Screen):
                 await chat.clear()
             await chat.add_user(text)
             await chat.start_assistant()
+            # Pasang sink research: event orchestrator (quick/deep) diteruskan
+            # ke panel via call_from_thread (aman dari thread manapun).
+            set_research_sink(
+                lambda ev: self.app.call_from_thread(
+                    self._apply_research_event, ev))
             async for event in run_agent(
                 text,
                 self.app.context,
@@ -205,11 +254,42 @@ class MainScreen(Screen):
                 elif isinstance(event, AgentError):
                     await chat.add_error(event.message)
         finally:
+            set_research_sink(None)
             self._sync_mode_ui()
             bar.set_status("idle")
             inbar.set_busy(False)
             inbar.focus()
             self._turn_running = False
+
+    def _apply_research_event(self, ev: dict[str, Any]) -> None:
+        """Terapkan satu event orchestrator ke SourcesPanel (jalan di app loop)."""
+        try:
+            panel = self.query_one(SourcesPanel)
+        except Exception:
+            return
+        kind = ev.get("type", "")
+        try:
+            if kind == "queries":
+                panel.add_queries(len(ev.get("queries", [])))
+            elif kind == "sources":
+                panel.update_sources(ev.get("sources", []))
+                if (self.app.mode_manager.get_mode() == "research"
+                        and not panel.display):
+                    panel.display = True  # auto-tampil saat hasil masuk
+            elif kind == "source":
+                panel.update_source(ev.get("url", ""), ev.get("status", "?"),
+                                    ev.get("preview", ""))
+            elif kind in ("round_start", "round"):
+                panel.set_round(ev.get("round", 0), ev.get("total", 0))
+            elif kind == "limit":
+                panel.set_notice(ev.get("reason", ""))
+            elif kind == "synthesizing":
+                panel.set_notice("menyusun jawaban...")
+            elif kind in ("answer", "report"):
+                panel.set_notice("")
+                panel.set_export_visible(True)
+        except Exception:
+            pass
 
     async def _confirm(self, tool_name: str, params: dict[str, Any]) -> str:
         bar = self.query_one(StatusBar)

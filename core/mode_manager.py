@@ -2,7 +2,7 @@
 
 Mode aktif:
     code      → Coding Agent (default, penuh di Phase 2)
-    research  → placeholder, aktif Phase 3
+    research  → Research Agent (penuh di Phase 3)
     personal  → placeholder, aktif Phase 4
 
 Command yang dikenal (lihat HELP_TEXT):
@@ -31,7 +31,7 @@ MODE_PERSONAL = "personal"
 HELP_TEXT = (
     "📖 Command multacd:\n"
     "  /code          → mode Coding Agent (default)\n"
-    "  /research      → Research Agent (coming Phase 3)\n"
+    "  /research      → mode Research Agent (riset internet + sumber)\n"
     "  /personal      → Personal Agent (coming Phase 4)\n"
     "  /clear         → bersihkan history, mulai sesi baru\n"
     "  /scan          → scan ulang codebase project\n"
@@ -59,13 +59,37 @@ MODE_PROMPTS = {
     ),
     MODE_RESEARCH: (
         "Kamu sedang dalam Research Agent mode. "
-        "(Placeholder Phase 3 — instruksi penuh menyusul.)"
+        "Kamu punya akses ke: web_search, web_scrape, quick_research, "
+        "deep_research, export_research. "
+        "Panduan: untuk pertanyaan butuh jawaban cepat dengan sumber → "
+        "quick_research; untuk topik kompleks butuh laporan mendalam → "
+        "deep_research. Selalu kutip sumber dalam jawaban. "
+        "Kalau scraping gagal, gunakan snippet dan beritahu user. "
+        "Tawarkan export ke .md setelah research selesai. "
+        "Deteksi dan flag informasi yang kontradiktif antar sumber."
     ),
     MODE_PERSONAL: (
         "Kamu sedang dalam Personal Agent mode. "
         "(Placeholder Phase 4 — instruksi penuh menyusul.)"
     ),
 }
+
+# Tool aktif di mode /research: research tools + read tools Phase 1
+# (web_fetch, read_file, dll tetap aktif — lihat PLAN-phase3 §10).
+RESEARCH_MODE_TOOLS = [
+    "web_search",
+    "web_scrape",
+    "quick_research",
+    "deep_research",
+    "export_research",
+    "read_file",
+    "read_many_files",
+    "glob",
+    "grep",
+    "list_dir",
+    "scan_codebase",
+    "web_fetch",
+]
 
 
 @dataclass
@@ -118,7 +142,12 @@ class ModeManager:
         return MODE_PROMPTS[self._mode]
 
     def get_active_tools(self) -> list[str] | None:
-        """None = semua tool aktif. Bukan git repo → list tanpa tool git."""
+        """None = semua tool aktif. Bukan git repo → list tanpa tool git.
+
+        Mode /research → list eksplisit (research + read tools).
+        """
+        if self._mode == MODE_RESEARCH:
+            return list(RESEARCH_MODE_TOOLS)
         if self._git_enabled:
             return None
         from core.permissions import GIT_TOOLS, KNOWN_TOOLS
@@ -139,7 +168,12 @@ class ModeManager:
         if cmd == "/code":
             return CommandResult(True, self.set_mode(MODE_CODE), "mode")
         if cmd == "/research":
-            return CommandResult(True, "🔬 Research Agent belum tersedia (coming Phase 3) — tetap di mode code.", None)
+            msg = self.set_mode(MODE_RESEARCH)
+            return CommandResult(
+                True,
+                f"{msg} — tanya apa saja, jawaban berkutipan sumber. "
+                "Ctrl+R panel sumber.",
+                "mode")
         if cmd == "/personal":
             return CommandResult(True, "🏠 Personal Agent belum tersedia (coming Phase 4) — tetap di mode code.", None)
         if cmd == "/clear":
@@ -195,9 +229,17 @@ if __name__ == "__main__":
     assert "/scan" in mm.handle_command("/help").message
     assert mm.handle_command("/soul").message == "soul-test"
 
-    # 4. Placeholder tetap di code
+    # 4. /research aktif (Phase 3); /personal masih placeholder
     r = mm.handle_command("/research")
-    assert "Phase 3" in r.message and mm.get_mode() == "code", (r, mm.get_mode())
+    assert mm.get_mode() == "research" and r.action == "mode", (r, mm.get_mode())
+    assert "quick_research" in mm.get_mode_prompt()
+    active = mm.get_active_tools()
+    assert active is not None and "quick_research" in active, active
+    assert "deep_research" in active and "web_search" in active
+    assert "read_file" in active and "web_fetch" in active
+    assert "git_commit" not in active and "bash" not in active
+    mm.handle_command("/code")
+    assert mm.get_mode() == "code" and mm.get_active_tools() is None
     r = mm.handle_command("/personal")
     assert "Phase 4" in r.message and mm.get_mode() == "code", (r, mm.get_mode())
 
@@ -226,4 +268,4 @@ if __name__ == "__main__":
     mm4 = ModeManager(rescan_fn=lambda: (_ for _ in ()).throw(RuntimeError("disk")))
     assert "gagal" in mm4.handle_command("/scan").message.lower()
 
-    print("✅ mode_manager self-test OK (9 skenario)")
+    print("✅ mode_manager self-test OK (9 skenario + research aktif)")

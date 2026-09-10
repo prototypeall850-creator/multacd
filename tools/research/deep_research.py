@@ -55,9 +55,11 @@ def deep_research(topic: str, max_rounds: int = 5,
 
         config = load_config()
         llm = setup_client(config)
+        from core.research.bus import get_research_sink
         res = _run_coro(_dr(topic.strip(), max_rounds=max_rounds,
                             config=config, llm=llm,
-                            language=(language or "").strip()))
+                            language=(language or "").strip(),
+                            on_event=get_research_sink()))
     except SystemExit:
         return fail(
             "Config belum disetup — jalankan `python main.py` sekali untuk "
