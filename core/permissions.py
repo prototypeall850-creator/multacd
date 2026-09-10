@@ -68,7 +68,7 @@ WRITE_TOOLS = frozenset({
 
 # ── Shell & Web ──
 BASH_TOOLS = frozenset({"bash"})  # ⚠️ bisa apa saja
-WEB_TOOLS = frozenset({"web_fetch"})
+WEB_TOOLS = frozenset({"web_fetch", "web_scrape"})
 
 # ── Code execution (jalankan kode → selalu konfirmasi, tanpa override config) ──
 CODE_TOOLS = frozenset({
