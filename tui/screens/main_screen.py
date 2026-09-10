@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.screen import Screen
@@ -227,6 +228,20 @@ class MainScreen(Screen):
     async def on_file_open_requested(self, event: FileOpenRequested) -> None:
         """Klik/Enter file di tree → agent baca file itu."""
         self._submit(f"Baca file {event.path} lalu jelaskan isinya secara ringkas.")
+
+    async def on_key(self, event: events.Key) -> None:
+        """Fallback permission: kalau bar menunggu dan tombol jawab ditekan
+        di widget lain (tree/panel), teruskan. InputBar sudah handle duluan
+        untuk kasusnya sendiri (TextArea menelan keystrokes)."""
+        if event.key.lower() not in ("y", "n", "a", "enter", "escape"):
+            return
+        try:
+            perm = self.query_one(PermissionBar)
+        except Exception:
+            return
+        if perm.is_waiting and perm.handle_key(event.key):
+            event.prevent_default()
+            event.stop()
 
     def _submit(self, text: str) -> None:
         if self._turn_running:

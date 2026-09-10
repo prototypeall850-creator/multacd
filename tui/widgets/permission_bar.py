@@ -81,20 +81,30 @@ class PermissionBar(Static):
         if self._future is not None and not self._future.done():
             self._future.set_result(value)
 
-    async def on_key(self, event: events.Key) -> None:
-        key = event.key.lower()
+    @property
+    def is_waiting(self) -> bool:
+        """True saat bar tampil dan menunggu tombol."""
+        return bool(self.display) and self._future is not None \
+            and not self._future.done()
+
+    def handle_key(self, key: str) -> bool:
+        """Rute satu tombol. Return True kalau dikonsumsi (jadi jawaban)."""
+        key = key.lower()
         if key == "y" or key == "enter":
-            event.prevent_default()
-            event.stop()
             self._resolve("yes")
-        elif key == "n" or key == "escape":
-            event.prevent_default()
-            event.stop()
+            return True
+        if key == "n" or key == "escape":
             self._resolve("no")
-        elif key == "a" and self._allow_all:
+            return True
+        if key == "a" and self._allow_all:
+            self._resolve("all")
+            return True
+        return False
+
+    async def on_key(self, event: events.Key) -> None:
+        if self.handle_key(event.key):
             event.prevent_default()
             event.stop()
-            self._resolve("all")
 
 
 if __name__ == "__main__":
@@ -112,5 +122,16 @@ if __name__ == "__main__":
     risky = render_line("delete_file", {"path": "old.py"})
     rs = str(risky)
     assert "permanent" in rs and " A" not in rs, rs
-    assert "delete_file" in str(render_line("x", {})) or True
-    print("✅ permission_bar self-test OK (render + target)")
+
+    # handle_key tanpa app: konsumsi benar, tanpa future = no-op aman.
+    from tui.widgets.permission_bar import PermissionBar as _PB
+
+    bar = _PB.__new__(_PB)
+    bar._future = None
+    bar._allow_all = True
+    assert bar.handle_key("y") and bar.handle_key("Enter")
+    assert bar.handle_key("n") and bar.handle_key("Escape")
+    assert bar.handle_key("a")
+    bar._allow_all = False  # risky: A ditolak
+    assert not bar.handle_key("a") and not bar.handle_key("z")
+    print("✅ permission_bar self-test OK (render + target + keys)")

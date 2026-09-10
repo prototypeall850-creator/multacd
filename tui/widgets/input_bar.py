@@ -6,6 +6,7 @@ from textual import events
 from textual.message import Message
 from textual.widgets import TextArea
 
+from tui.widgets.permission_bar import PermissionBar
 from tui.widgets.slash_palette import SlashPalette
 
 
@@ -26,6 +27,15 @@ class InputBar(TextArea):
         self.border_title = "Enter kirim · /help · Ctrl+T tree · Ctrl+R sources"
 
     async def on_key(self, event: events.Key) -> None:
+        # Permission bar menunggu → SEMUA tombol jawab jadi miliknya,
+        # apapun yang fokus (TextArea menelan keystrokes miliknya sendiri).
+        perm = self._waiting_perm()
+        if perm is not None and event.key.lower() in (
+                "y", "n", "a", "enter", "escape"):
+            event.prevent_default()
+            event.stop()
+            perm.handle_key(event.key)
+            return
         pal = self._open_palette()
         if pal is not None:
             # Palette terbuka → tombol dinavigasi palette, bukan editing.
@@ -68,6 +78,14 @@ class InputBar(TextArea):
         except Exception:
             return None
         return pal if pal.is_open else None
+
+    def _waiting_perm(self) -> PermissionBar | None:
+        """PermissionBar yang menunggu jawaban (None kalau tidak ada)."""
+        try:
+            perm = self.screen.query_one(PermissionBar)
+        except Exception:
+            return None
+        return perm if perm.is_waiting else None
 
     def set_busy(self, busy: bool) -> None:
         """Disable saat agent berpikir (hindari submit ganda)."""
