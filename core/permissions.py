@@ -82,6 +82,16 @@ CODE_TOOLS = frozenset({
     "run_tests",
 })
 
+# ── Tool berisiko tinggi: tanpa opsi [A] (session-approve terlalu berbahaya).
+# Single source of truth — dipakai UI permission (popup) DAN guard session
+# approval di bawah (dulu duplikat di tui/widgets/permission_popup.py).
+RISKY_TOOLS = frozenset({"delete_file", "git_push"})
+
+# Tool yang TIDAK BOLEH di-approve sekaligus untuk satu sesi via [A]:
+# eksekusi kode & research kontraknya "selalu ask", tool risky terlalu
+# merusak untuk di-auto-kan. UI tidak boleh bisa bypass kontrak ini.
+NO_SESSION_APPROVAL = CODE_TOOLS | RESEARCH_TOOLS | RISKY_TOOLS
+
 AUTO_APPROVED: frozenset[str] = READ_TOOLS | META_TOOLS | GIT_TOOLS | SEARCH_TOOLS
 ASK_REQUIRED: frozenset[str] = WRITE_TOOLS | BASH_TOOLS | WEB_TOOLS | CODE_TOOLS | RESEARCH_TOOLS
 KNOWN_TOOLS: frozenset[str] = AUTO_APPROVED | ASK_REQUIRED
@@ -118,13 +128,14 @@ def check_permission(tool_name: str, config: Config | None = None) -> Decision:
     if tool_name in RESEARCH_TOOLS:
         return "ask"  # research: internet + token, tanpa override config
     return "deny"
-    return "deny"
 
 
 class PermissionChecker:
     """Resolver stateful per sesi — pegang override [A] Izinkan Semua Sesi Ini.
 
     Opsi [A] hanya berlaku untuk sesi ini; sesi baru = instance baru.
+    TIDAK berlaku untuk NO_SESSION_APPROVAL (eksekusi kode, research,
+    tool risky) — kontrak "selalu ask" tidak bisa dibypass UI.
     """
 
     def __init__(self, config: Config | None = None) -> None:
@@ -132,11 +143,19 @@ class PermissionChecker:
         self._session_auto: set[str] = set()
 
     def approve_all_for_session(self, tool_name: str) -> None:
-        """User tekan [A] — tool ini auto sampai sesi berakhir."""
+        """User tekan [A] — tool ini auto sampai sesi berakhir.
+
+        Diabaikan untuk NO_SESSION_APPROVAL (Bug 2: dulu [A] di run_python
+        membuat eksekusi kode auto sampai sesi berakhir).
+        """
+        if tool_name in NO_SESSION_APPROVAL:
+            return
         self._session_auto.add(tool_name)
 
     def check(self, tool_name: str, params: dict[str, Any] | None = None) -> Decision:
-        if tool_name in self._session_auto:
+        # Defense in depth: meski _session_auto tercemar (mutasi langsung),
+        # tool selalu-ask/risky tetap tidak pernah auto via session.
+        if tool_name in self._session_auto and tool_name not in NO_SESSION_APPROVAL:
             return "auto"
         # Eskalasi param-aware: lint + fix=true berarti tulis file.
         if tool_name == "lint_python" and (params or {}).get("fix") in (True, "true", "1"):
@@ -177,6 +196,20 @@ if __name__ == "__main__":
     checker.approve_all_for_session("write_file")
     assert checker.check("write_file") == "auto"
     assert PermissionChecker().check("write_file") == "ask"  # sesi baru = reset
+
+    # [A] TIDAK berlaku untuk tool selalu-ask & risky (fix Bug 2):
+    # eksekusi kode, research, delete_file tetap ask selamanya.
+    checker2 = PermissionChecker()
+    for t in sorted(NO_SESSION_APPROVAL - GIT_TOOLS):
+        checker2.approve_all_for_session(t)
+        assert checker2.check(t) == "ask", t
+    # git_push auto by category (GIT_TOOLS — guard aslinya gate
+    # allow_protected di tool), [A] tidak mengubah keputusannya.
+    checker2.approve_all_for_session("git_push")
+    assert checker2.check("git_push") == "auto"
+    # ...tapi tool biasa (bash, write_file) tetap bisa session-approved.
+    checker2.approve_all_for_session("bash")
+    assert checker2.check("bash") == "auto"
 
     # Eskalasi lint: fix=true (bool/string) → ask; default tetap auto.
     assert PermissionChecker().check("lint_python") == "auto"

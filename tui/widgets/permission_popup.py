@@ -23,10 +23,8 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, Static
 
+from core.permissions import NO_SESSION_APPROVAL, RISKY_TOOLS  # single source of truth
 from tui import icons
-
-# Tool berisiko tinggi: tanpa opsi [A] (session-approve terlalu berbahaya).
-RISKY_TOOLS = frozenset({"delete_file", "git_push"})
 
 
 def target_of(params: dict[str, Any]) -> str:
@@ -67,7 +65,10 @@ class PermissionPopup(Vertical):
         """Tampilkan popup, tunggu tombol/keyboard. Return yes/no/all."""
         loop = asyncio.get_running_loop()
         self._future = loop.create_future()
-        self._allow_all = tool_name not in RISKY_TOOLS
+        # [A] disembunyikan untuk tool yang kontraknya tidak boleh session-
+        # approve (eksekusi kode, research, risky) — bukan cuma risky,
+        # biar tombolnya tidak jadi janji palsu (klik [A] tapi tak persist).
+        self._allow_all = tool_name not in NO_SESSION_APPROVAL
         self.query_one("#perm-prompt", Static).update(
             prompt_of(tool_name, params))
         self.query_one("#perm-all", Button).display = self._allow_all
