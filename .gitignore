@@ -1,0 +1,34 @@
+# Python
+.venv/
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Env & secrets
+.env
+.env.*
+*.key
+*.pem
+
+# multacd local data (personal, jangan di-commit)
+# NOTE: data user tersimpan di ~/.multacd/, bukan di repo.
+# Baris di bawah ini jaga-jaga kalau ada yang nyasar ke repo.
+.memory.db
+todo.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
