@@ -53,7 +53,9 @@ MODE_PROMPTS = {
         "tanpa izin eksplisit — kalau tool menolak, tawarkan ke user: "
         "tetap push, buat branch baru, atau batal. "
         "Kalau merge conflict: analisis ours-vs-theirs, suggest resolusi, "
-        "apply via edit_file + git_add hanya setelah user setuju."
+        "apply via edit_file + git_add hanya setelah user setuju. "
+        "Kalau run_python/lint_python/run_tests gagal atau error: baca output-nya, "
+        "jelaskan penyebab ke user, suggest fix — jangan auto-fix tanpa izin."
     ),
     MODE_RESEARCH: (
         "Kamu sedang dalam Research Agent mode. "
