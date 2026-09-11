@@ -2,6 +2,15 @@
 
 Format: Keep a Changelog. Versi: Semantic Versioning.
 
+## [2.0.0b1] - 2026-09-12
+
+Beta v2 buat test Termux: redesign TUI (tanpa emoticon, responsif),
+model selector, info panel, live output, token resmi, approve commit,
+wizard back-nav, /copy, installer anti-diam + panduan pip Termux.
+
+Install beta: `pip install --pre "multacd==2.0.0b1"` (PyPI pre-release)
+atau binary dari halaman GitHub prerelease.
+
 ## [Unreleased] (menuju 2.0.0 — redesign v2 full bebas)
 
 ### Changed (breaking visual, config v1 tetap kebaca)
