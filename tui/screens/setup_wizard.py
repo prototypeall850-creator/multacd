@@ -69,6 +69,30 @@ def prefix_model(provider_id: str, model: str) -> str:
     return f"{provider_id}/{model}"
 
 
+def prev_step(step: int, *, needs_key: bool,
+              search_key_shown: bool, telegram_on: bool) -> int:
+    """Langkah mundur dari `step` (pure function, gampang dites).
+
+    Melompati step kondisional yang tak ditampilkan (keyless ollama,
+    search skip/duckduckgo, telegram skip). Step 4 (fetching) tak punya
+    tombol Back — tapi mapping tetap ada buat Esc.
+    """
+    back = {
+        1: 0,
+        2: 1,
+        3: 2,
+        4: 3 if needs_key else 2,
+        5: 3 if needs_key else 2,  # mundur = isi ulang key/base (fetch ulang)
+        6: 5,
+        7: 6,
+        8: 7 if search_key_shown else 6,
+        9: 8,
+        10: 9,
+        11: 10 if telegram_on else 8,
+    }
+    return back.get(step, step)
+
+
 def fetch_models(provider_id: str, base: str, key: str,
                  timeout: int = 15) -> tuple[list[str], str]:
     """Ambil daftar model dari provider. Return (models, error).
@@ -149,6 +173,7 @@ class SetupWizard(Screen):
         self.models: list[str] = []
         self.fetch_error = ""
         self.fetch_models_fn = fetch_models  # mockable di test
+        self._fetch_gen = 0  # batalkan fetch basi (user Back saat loading)
 
     def compose(self) -> ComposeResult:
         yield Static("multacd setup", id="wiz-title")
@@ -184,7 +209,7 @@ class SetupWizard(Screen):
                 f"Config belum ditemukan di {self.save_path}\n"
                 "Mari setup dalam beberapa langkah."))
             await body.mount(Static("[ Enter ]  Continue"))
-            self._hint("Enter lanjut · Ctrl+C batal")
+            self._hint("Enter lanjut · Esc kembali · Ctrl+C batal")
         elif self.step == 1:
             await body.mount(Static("Setup (1/6) — LLM Provider"))
             items = [ListItem(Label(f"{'★ ' if p.id == self.provider.id else ''}"
@@ -194,7 +219,7 @@ class SetupWizard(Screen):
             lv.index = next(i for i, p in enumerate(PROVIDERS)
                             if p.id == self.provider.id)
             lv.focus()
-            self._hint("Atas/Bawah pilih · Enter lanjut")
+            self._hint("Atas/Bawah pilih · Enter lanjut · Esc kembali")
         elif self.step == 2:
             await body.mount(Static(
                 f"Setup (2/6) — API Base URL ({self.provider.label})\n"
@@ -204,7 +229,7 @@ class SetupWizard(Screen):
             await body.mount(Input(
                 value=self.api_base or self.provider.default_base,
                 placeholder="https://... (kosong = default)", id="wiz-input"))
-            self._hint("Enter lanjut · Ctrl+C batal")
+            self._hint("Enter lanjut · Esc kembali · Ctrl+C batal")
             self.query_one("#wiz-input", Input).focus()
         elif self.step == 3:
             await body.mount(Static(
@@ -212,11 +237,12 @@ class SetupWizard(Screen):
             await body.mount(Input(
                 placeholder=self.provider.key_hint or "api key",
                 password=True, id="wiz-input"))
-            self._hint("Enter lanjut · karakter disembunyikan")
+            self._hint("Enter lanjut · Esc kembali · karakter disembunyikan")
             self.query_one("#wiz-input", Input).focus()
         elif self.step == 4:
             await body.mount(Static("Setup (4/6) — Model\nFetching..."))
-            self._hint("tunggu sebentar...")
+            self._hint("tunggu sebentar... (Esc = kembali)")
+            self._fetch_gen += 1
             self.run_worker(self._load_models())
         elif self.step == 5:
             await body.mount(Static(
@@ -230,7 +256,7 @@ class SetupWizard(Screen):
                 await body.mount(ListView(
                     *[ListItem(Label(m)) for m in self.models[:20]],
                     id="wiz-list"))
-            self._hint("Ketik manual lalu Enter · klik list untuk pilih")
+            self._hint("Ketik manual lalu Enter · klik list · Esc kembali")
             with suppress(Exception):
                 self.query_one("#wiz-input", Input).focus()
         elif self.step == 6:
@@ -242,7 +268,7 @@ class SetupWizard(Screen):
                 *[ListItem(Label(lbl)) for lbl in labels], id="wiz-list")
             await body.mount(search_lv)
             search_lv.focus()
-            self._hint("Atas/Bawah pilih · Enter lanjut")
+            self._hint("Atas/Bawah pilih · Enter lanjut · Esc kembali")
         elif self.step == 7:
             need_key = (self.search_provider not in ("skip", "duckduckgo"))
             await body.mount(Static(
@@ -254,7 +280,7 @@ class SetupWizard(Screen):
                 self.query_one("#wiz-input", Input).focus()
             else:
                 await body.mount(Button("Lanjut [Enter]", id="wiz-next"))
-            self._hint("Enter lanjut")
+            self._hint("Enter lanjut · Esc kembali")
         elif self.step == 8:
             await body.mount(Static(
                 "Setup (6/6) — Telegram bot (opsional)\n"
@@ -264,7 +290,7 @@ class SetupWizard(Screen):
                 ListItem(Label("Skip (nanti saja)")), id="wiz-list")
             await body.mount(tg_lv)
             tg_lv.focus()
-            self._hint("Atas/Bawah pilih · Enter lanjut")
+            self._hint("Atas/Bawah pilih · Enter lanjut · Esc kembali")
         elif self.step == 9:
             await body.mount(Static(
                 "Telegram — bot token dari @BotFather\n"
@@ -272,7 +298,7 @@ class SetupWizard(Screen):
             await body.mount(Input(placeholder="123456:AAF...",
                                    password=True, id="wiz-input"))
             self.query_one("#wiz-input", Input).focus()
-            self._hint("Enter lanjut")
+            self._hint("Enter lanjut · Esc kembali")
         elif self.step == 10:
             await body.mount(Static(
                 "Telegram — user ID kamu (angka, dari @userinfobot)\n"
@@ -280,7 +306,7 @@ class SetupWizard(Screen):
             await body.mount(Input(placeholder="123456 usernamekamu",
                                    id="wiz-input"))
             self.query_one("#wiz-input", Input).focus()
-            self._hint("Enter lanjut")
+            self._hint("Enter lanjut · Esc kembali")
         elif self.step == 11:
             tg_on = "ya" if self.telegram_enabled else "tidak"
             lines = [
@@ -295,16 +321,41 @@ class SetupWizard(Screen):
             await body.mount(Button("Simpan & Mulai [Enter]", id="wiz-save"))
             await body.mount(Button("Ulangi Setup", id="wiz-restart"))
             self._hint("Enter simpan · Ctrl+C batal")
+        # Tombol Kembali di semua step isi (kecuali welcome/fetch/final).
+        # Termux tak selalu punya Esc — tombol ini yang utama di HP.
+        if self.step not in (0, 4, 11):
+            await body.mount(Button("← Kembali [Esc]", id="wiz-back"))
 
     async def _load_models(self) -> None:
+        gen = self._fetch_gen
         base = self.api_base or self.provider.default_base
         models, err = await asyncio.to_thread(
             self.fetch_models_fn, self.provider.id, base, self.api_key)
+        if gen != self._fetch_gen:
+            return  # user Back saat fetch — hasil basi dibuang
         self.models = models
         self.fetch_error = err
         if models and not err:
             self.model = prefix_model(self.provider.id, models[0])
         self.step = 5
+        self._show()
+
+    def _back_args(self) -> dict[str, bool]:
+        return {
+            "needs_key": self.provider.needs_key,
+            "search_key_shown": self.search_provider not in ("skip", "duckduckgo"),
+            "telegram_on": self.telegram_enabled,
+        }
+
+    async def _prev(self) -> None:
+        """Mundur satu langkah (Esc / tombol Kembali). Step 0: diam.
+
+        Step 4 (fetching) boleh mundur — fetch basi dibuang via _fetch_gen.
+        """
+        if self.step == 0:
+            return
+        self._fetch_gen += 1  # batalkan fetch yang mungkin jalan
+        self.step = prev_step(self.step, **self._back_args())
         self._show()
 
     # ── navigasi ──
@@ -350,7 +401,9 @@ class SetupWizard(Screen):
         self._show()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "wiz-next":
+        if event.button.id == "wiz-back":
+            await self._prev()
+        elif event.button.id == "wiz-next":
             if self.step == 7:
                 await self._next_from("")
             else:
@@ -439,6 +492,10 @@ class SetupWizard(Screen):
             event.prevent_default()
             event.stop()
             await self._next_from()
+        elif event.key == "escape":
+            event.prevent_default()
+            event.stop()
+            await self._prev()
 
 
 class SetupApp(App[None]):
@@ -480,4 +537,15 @@ if __name__ == "__main__":
     assert len(PROVIDERS) == 6 and len(SEARCH_OPTIONS) == 6
     assert PROVIDERS[0].id == "anthropic"
     assert not PROVIDERS[4].needs_key  # ollama keyless
-    print("✅ setup_wizard self-test OK (prefix + metadata)")
+    # Back-nav: lompati step kondisional yang tak tampil.
+    full = {"needs_key": True, "search_key_shown": True, "telegram_on": True}
+    assert [prev_step(s, **full) for s in (1, 2, 3, 5, 6, 8, 11)] == \
+        [0, 1, 2, 3, 5, 7, 10]
+    assert prev_step(4, **full) == 3 and prev_step(7, **full) == 6
+    assert prev_step(9, **full) == 8 and prev_step(10, **full) == 9
+    skip = {"needs_key": False, "search_key_shown": False,
+            "telegram_on": False}
+    assert prev_step(5, **skip) == 2 and prev_step(4, **skip) == 2
+    assert prev_step(8, **skip) == 6 and prev_step(11, **skip) == 8
+    assert prev_step(0, **full) == 0  # mentok, diam
+    print("✅ setup_wizard self-test OK (prefix + metadata + back-nav)")

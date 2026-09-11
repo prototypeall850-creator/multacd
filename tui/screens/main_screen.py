@@ -50,6 +50,7 @@ class MainScreen(Screen):
         ("ctrl+r", "toggle_sources", "Sources"),
         ("ctrl+o", "open_models", "Models"),
         ("ctrl+i", "toggle_info", "Info"),
+        ("ctrl+y", "copy_last", "Copy"),
     ]
 
     CSS = """
@@ -228,8 +229,35 @@ class MainScreen(Screen):
         # Tandai ulang file modified kalau tree sedang tampil.
         tree = self.query_one(ProjectTree)
         if tree.display:
-            tree.mark_modified(modified_files(self.app.workdir))
+            self._refresh_tree_marks(tree)
         self._refresh_info()
+
+    def _refresh_tree_marks(self, tree: ProjectTree | None = None) -> None:
+        """Reload tree dari disk + tandai modified (file baru agent muncul).
+
+        reload() async di dalam — mark ditunda 0.5 dtk biar node kebentuk.
+        Tak pernah raise; diam kalau tree disembunyikan user di tengah jalan.
+        """
+        try:
+            tree = tree or self.query_one(ProjectTree)
+        except Exception:
+            return
+        if not tree.display:
+            return
+        with suppress(Exception):
+            tree.reload()
+        with suppress(Exception):
+            self.set_timer(0.5, self._mark_tree_delayed)
+
+    def _mark_tree_delayed(self) -> None:
+        try:
+            tree = self.query_one(ProjectTree)
+        except Exception:
+            return
+        if not tree.display:
+            return
+        with suppress(Exception):
+            tree.mark_modified(modified_files(self.app.workdir))
 
     def _refresh_info(self) -> None:
         """Update info panel (kalau tampil) — tak pernah raise."""
@@ -371,8 +399,48 @@ class MainScreen(Screen):
         if text.strip().lower() == "/model":
             self.model_open()
             return
+        # /copy [n] → salin jawaban assistant (TUI-local, tak ke LLM).
+        parts = text.strip().split()
+        if parts and parts[0].lower() == "/copy":
+            n = 1
+            if len(parts) > 1:
+                try:
+                    n = max(1, int(parts[1]))
+                except ValueError:
+                    n = 1
+            self.copy_assistant(n)
+            return
         self._turn_running = True
         self.run_worker(self._run_turn(text))
+
+    def action_copy_last(self) -> None:
+        """Ctrl+Y: salin jawaban terakhir."""
+        self.copy_assistant(1)
+
+    def copy_assistant(self, n: int = 1) -> None:
+        """Salin jawaban assistant ke-n ke clipboard + lapor di chat."""
+        try:
+            chat = self.query_one(ChatPanel)
+            text = chat.assistant_history(n)
+        except Exception:
+            return
+        if not text:
+            self.run_worker(self._copy_note("(belum ada jawaban buat disalin)"))
+            return
+        self.run_worker(self._copy_do(text))
+
+    async def _copy_do(self, text: str) -> None:
+        from core.clipboard import copy_text
+        try:
+            msg = await asyncio.to_thread(copy_text, text)
+        except Exception as e:
+            msg = f"gagal salin ({e})."
+        with suppress(Exception):
+            await self.query_one(ChatPanel).add_info(msg)
+
+    async def _copy_note(self, msg: str) -> None:
+        with suppress(Exception):
+            await self.query_one(ChatPanel).add_info(msg)
 
     def action_open_models(self) -> None:
         """Ctrl+O: buka model selector (DESIGN §12)."""
@@ -409,7 +477,7 @@ class MainScreen(Screen):
             self.query_one(InputBar).focus()
         else:
             tree.display = True
-            tree.mark_modified(modified_files(self.app.workdir))
+            self._refresh_tree_marks(tree)
             tree.focus()
 
     def action_toggle_sources(self) -> None:

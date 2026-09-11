@@ -64,6 +64,7 @@ class ChatPanel(VerticalScroll):
         super().__init__(id="chat-panel")
         self._assistant_md: Markdown | None = None
         self._assistant_text = ""
+        self._assistant_history: list[str] = []  # jawaban selesai (buat /copy)
         self._tool_rows: dict[str, ToolActivity] = {}
         self._live: dict[str, tuple[Static, list[str]]] = {}
 
@@ -84,6 +85,9 @@ class ChatPanel(VerticalScroll):
 
     async def start_assistant(self) -> None:
         """Mulai bubble assistant baru untuk turn ini (streaming menempel ke sini)."""
+        if self._assistant_text.strip():
+            self._assistant_history.append(self._assistant_text)
+            del self._assistant_history[:-20]
         self._assistant_text = ""
         self._assistant_md = Markdown("", classes="assistant-md")
         self._assistant_md.border_title = "multacd"
@@ -152,12 +156,25 @@ class ChatPanel(VerticalScroll):
             return
         row.set_done(success, result)
 
+    def assistant_history(self, n: int = 1) -> str:
+        """Jawaban assistant ke-n dari belakang (1 = terakhir). '' = kosong."""
+        if n < 1:
+            return ""
+        idx = len(self._assistant_history) - n
+        if idx < 0:
+            # Turn berjalan (belum start berikutnya) = kandidat terakhir.
+            if n == 1 and self._assistant_text.strip():
+                return self._assistant_text
+            return ""
+        return self._assistant_history[idx]
+
     async def clear(self) -> None:
         """Kosongkan semua bubble (dipakai /clear) + reset state streaming."""
         for child in list(self.children):
             await child.remove()
         self._assistant_md = None
         self._assistant_text = ""
+        self._assistant_history.clear()
         self._tool_rows.clear()
 
     def render_markdown_text(self, text: str) -> RichMarkdown:

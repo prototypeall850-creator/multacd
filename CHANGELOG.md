@@ -8,6 +8,9 @@ Format: Keep a Changelog. Versi: Semantic Versioning.
 - Tema default `multacd-dark` + `multacd-light`/`multacd-min` (Termux hemat)
 - Status bar compact di layar sempit, splash v2, palette fuzzy, thinking statis min-mode
 - Wizard numbering /6, AskDialog responsif, marker git peach
+- Wizard back-nav (Esc/tombol, fetch basi dibuang), tree reload tiap turn
+- `/copy [n]` + Ctrl+Y salin jawaban (clipboard chain + fallback file)
+- Live output tool, token resmi provider, approve commit + branch dialog
 
 ## [1.0.0] - 2026-09-11
 
