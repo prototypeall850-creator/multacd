@@ -1,7 +1,7 @@
 # ⚡ multacd
 
 Agentic TUI untuk coding, research, dan personal automation — dalam satu terminal.
-Satu config BYOK untuk 100+ LLM provider via LiteLLM.
+Satu config BYOK untuk LLM favoritmu via provider native (ringan, Termux aman).
 
 ```
 > /code      baca main.py lalu jelaskan cara kerjanya

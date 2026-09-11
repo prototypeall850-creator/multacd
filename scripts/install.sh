@@ -60,10 +60,9 @@ pip_fallback() {
         # (bionic libc) — Termux wajib jalur pip.
         echo "Termux terdeteksi — pakai jalur pip (binary rilis tidak kompatibel)."
         echo ""
-        echo "  1. Siapkan toolchain (sekali saja, ~10 menit di HP):"
-        echo "     pkg install -y python rust git binutils"
-        echo "     (paket 'rust' wajib: dependensi litellm di-build dari source"
-        echo "     di Termux karena belum ada wheel Android-aarch64)"
+        echo "  1. Siapkan toolchain (sekali saja):"
+        echo "     pkg install -y python git curl"
+        echo "     (ringan: tanpa kompilasi Rust — dependensi wheel murni)"
         echo ""
         echo "  2. Install multacd:"
         echo "     pip install \"git+https://github.com/$REPO\""

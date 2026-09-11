@@ -28,7 +28,9 @@ def test_spec_has_entry_and_data():
     assert "soul.md" in src
     assert "console=True" in src
     assert "onefile=True" in src
-    assert "litellm" in src and "tiktoken" in src
+    # v2: provider native (tanpa litellm/tiktoken yang berat di Termux).
+    assert "litellm" not in src and "tiktoken" not in src
+    assert "core.providers" in src
 
 
 def test_dist_binary_version():

@@ -36,7 +36,7 @@ briefing:
   news_sources: 3
 ```
 
-- Provider model: format LiteLLM (`anthropic/...`, `openai/...`,
+- Provider model: format `provider/nama` (`anthropic/...`, `openai/...`,
   `gemini/...`, `groq/...`, `ollama/...`).
 - Baris bertag `[private]` di todo tidak pernah dikirim ke LLM.
 - Plugin user: `~/.multacd/plugins/` (lihat [Plugins](plugins.md)).

@@ -85,6 +85,7 @@ class AgentUsage:
 
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    cost_usd: float = 0.0  # estimasi lokal (tabel harga provider)
 
 
 @dataclass

@@ -1,13 +1,12 @@
-# multacd.spec — PyInstaller build (Phase 5 Step 5).
+# multacd.spec — PyInstaller build.
 # Build lokal:  pyinstaller multacd.spec   → dist/multacd
-# CI (Step 9):  matrix 5 platform, output diganti per OS.
+# CI: matrix platform, output diganti per OS.
+#
+# NOTE v2: provider native via httpx (wheel murni),
+# jadi tak perlu collect data/hiddenimports berat lagi.
+# Binary susut signifikan dibanding era sebelum v2.
 
 # ruff: noqa — Analysis/PYZ/EXE/collect_data_files adalah global PyInstaller.
-
-from PyInstaller.utils.hooks import collect_data_files
-
-_litellm_data = collect_data_files("litellm")
-_tiktoken_data = collect_data_files("tiktoken")
 
 a = Analysis(
     ["main.py"],
@@ -17,29 +16,15 @@ a = Analysis(
         ("soul.md", "."),
         ("plugins/example_plugin.py", "plugins"),
         ("plugins/README.md", "plugins"),
-        *_litellm_data,
-        *_tiktoken_data,
     ],
     hiddenimports=[
-        # tiktoken registry encoding (dibutuhkan litellm token counter).
-        "tiktoken_ext.openai_public",
-        "tiktoken_ext",
-        # LiteLLM load provider dinamis (importlib) — tak kedetek statis.
-        "litellm",
-        "litellm.litellm_core_utils",
-        "litellm.llms",
-        "litellm.providers",
-        # Provider spesifik yang dipakai via LiteLLM routing.
-        "anthropic",
-        "openai",
-        "google",
-        "groq",
-        "ollama",
         # Package kita yang diimport lazy (agent_loop, daemon, bot).
         "tools.registry",
         "core.agent_loop",
         "core.plugin_loader",
         "core.updater",
+        "core.providers.openai_compat",
+        "core.providers.anthropic",
         "scheduler.engine",
         "tg.bot",
         "tg.agent",

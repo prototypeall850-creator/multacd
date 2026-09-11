@@ -139,6 +139,7 @@ class MainScreen(Screen):
         self._tools_run = 0  # counter sesi buat info panel
         self._sess_prompt = 0  # token resmi provider (0 = belum ada laporan)
         self._sess_completion = 0
+        self._sess_cost = 0.0  # USD est (tabel harga lokal ala OpenCode)
 
     def compose(self) -> ComposeResult:
         yield StatusBar()
@@ -272,8 +273,11 @@ class MainScreen(Screen):
                         for m in self.app.context.get_messages())
             real_total = self._sess_prompt + self._sess_completion
             # Token resmi kalau provider melapor; kalau tidak, heuristik ~.
+            # Cost: angka resmi kalau >0, else estimasi ~, else — (lokal).
             tokens_s = (f"{real_total:,}".replace(",", ".") if real_total
                         else f"~{estimate_tokens(chars):,}".replace(",", "."))
+            cost_s = (f"${self._sess_cost:.3f} est" if self._sess_cost > 0
+                      else "—")
             git = self.app.git_summary
             git_s = "—"
             if git.get("is_repo"):
@@ -285,6 +289,7 @@ class MainScreen(Screen):
                 "project": self.app.project_label,
                 "git": git_s,
                 "tokens": tokens_s,
+                "cost": cost_s,
                 "messages": len(self.app.context),
                 "tools": self._tools_run,
                 "model": self.app.cfg.model,
@@ -579,6 +584,7 @@ class MainScreen(Screen):
                 elif isinstance(event, AgentUsage):
                     self._sess_prompt += event.prompt_tokens
                     self._sess_completion += event.completion_tokens
+                    self._sess_cost += event.cost_usd
                 elif isinstance(event, AgentError):
                     await chat.add_error(event.message)
         finally:
