@@ -76,6 +76,8 @@ SELF_TEST_MODULES = [
     "scheduler.engine",
     "scheduler.jobs.briefing_job",
     "scheduler.jobs.research_job",
+    "daemon.ipc",
+    "daemon.process",
     "briefing.sources.todo_source",
     "briefing.sources.git_source",
     "briefing.sources.news_source",

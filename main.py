@@ -2,7 +2,9 @@
 """multacd — Agentic TUI (Coding + Research + Personal).
 
 Entry point:
-    python main.py [--config PATH] [--model MODEL]
+    python main.py [--config PATH] [--model MODEL]        → TUI
+    python main.py --daemon [--config PATH]               → daemon foreground
+    python main.py daemon start|stop|status|logs          → kelola background
 """
 
 from __future__ import annotations
@@ -12,6 +14,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import contextlib
 
 from core.config import load_config
 from tui.app import APP_VERSION, MultacdApp
@@ -27,7 +31,61 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--model", default=None,
                    help="Override model (format LiteLLM, mis. groq/llama-3.3-70b-versatile)")
     p.add_argument("--version", action="store_true", help="Tampilkan versi & keluar")
+    p.add_argument("--daemon", action="store_true",
+                   help="Jalan sebagai daemon foreground (bot + scheduler, tanpa TUI)")
+    p.add_argument("--daemon-run", action="store_true",
+                   help=argparse.SUPPRESS)  # internal: target child daemon_start
+    sub = p.add_subparsers(dest="daemon_cmd", metavar="daemon {start,stop,status,logs}")
+    d = sub.add_parser("daemon", help="Kelola daemon background")
+    d.add_argument("action", choices=["start", "stop", "status", "logs"],
+                   help="start = jalan background · logs = lihat log")
+    d.add_argument("-n", "--lines", type=int, default=50,
+                   help="baris log ditampilkan (default 50)")
+    d.add_argument("-f", "--follow", action="store_true",
+                   help="tail -f log (Ctrl+C berhenti)")
     return p.parse_args(argv)
+
+
+def _run_daemon_cmd(args: argparse.Namespace) -> int:
+    """Handler `python main.py daemon ...`. Return exit code."""
+    from daemon import ipc as _ipc
+    from daemon.process import daemon_start, daemon_stop, is_running, log_file, read_pid
+
+    if args.action == "start":
+        print(daemon_start(args.config))
+        return 0
+    if args.action == "stop":
+        print(daemon_stop())
+        return 0
+    if args.action == "status":
+        pid = read_pid()
+        if not is_running(pid):
+            print("Daemon: stopped")
+            return 0
+        live = _ipc.send("status")
+        if live["ok"]:
+            result = live["result"]
+            print(f"Daemon: running (PID {pid})")
+            print(f"Bot: {result.get('bot', '?')}")
+            for job in result.get("jobs", []):
+                print(f"  - {job['name']}: {job['cron']} → {job['action']} "
+                      f"(next: {job['next_run']})")
+        else:
+            print(f"Daemon: running (PID {pid}) — IPC: {live['error']}")
+        return 0
+    # logs
+    log = log_file()
+    if not log.is_file():
+        print("(belum ada log)")
+        return 0
+    if args.follow:
+        import subprocess as _sp
+        with contextlib.suppress(KeyboardInterrupt):
+            _sp.run(["tail", "-f", "-n", str(args.lines), str(log)])
+        return 0
+    lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+    print("\n".join(lines[-args.lines:]) or "(log kosong)")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -35,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.version:
         print(f"multacd {APP_VERSION}")
         return 0
+    if args.daemon_cmd == "daemon":
+        return _run_daemon_cmd(args)
 
     try:
         cfg = load_config(args.config)
@@ -63,6 +123,13 @@ def main(argv: list[str] | None = None) -> int:
             print("❌ --model tidak boleh kosong.", file=sys.stderr)
             return 1
         cfg.model = args.model.strip()
+
+    if args.daemon or args.daemon_run:
+        # Daemon: tanpa TUI, tanpa wizard (config wajib sudah ada).
+        from daemon.process import run_daemon
+        print("👻 daemon mode: scheduler + bot, tanpa TUI. "
+              "Ctrl+C / daemon stop untuk berhenti.")
+        return run_daemon(cfg)
 
     try:
         MultacdApp(cfg, version=APP_VERSION).run()
