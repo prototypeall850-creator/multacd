@@ -2,9 +2,10 @@
 # install.sh — multacd installer (Linux / macOS / Termux).
 #
 # Cara pakai (download dulu biar gagalnya kelihatan — JANGAN pipe-buta):
-#   curl -fSL https://raw.githubusercontent.com/prototypeall850-creator/multacd/main/scripts/install.sh -o /tmp/m-install.sh \
-#     && bash /tmp/m-install.sh
+#   curl -fSL https://raw.githubusercontent.com/prototypeall850-creator/multacd/main/scripts/install.sh -o ./m-install.sh \
+#     && bash ./m-install.sh && rm ./m-install.sh
 # Pipe `curl ... | bash` menelan error curl (stdin bash kosong = diam saja).
+# NOTE Termux: jangan pakai /tmp (tidak ada) — ./ (cwd) selalu bisa ditulis.
 #
 # Env override (buat test / mirror sendiri):
 #   MULTACD_REPO         "owner/repo" (default: prototypeall850-creator/multacd)

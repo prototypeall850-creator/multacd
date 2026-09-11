@@ -94,7 +94,7 @@ jobs:
             Linux / macOS (download dulu biar gagalnya kelihatan):
 
             ```bash
-            curl -fSL https://raw.githubusercontent.com/prototypeall850-creator/multacd/main/scripts/install.sh -o /tmp/m-install.sh && bash /tmp/m-install.sh
+            curl -fSL https://raw.githubusercontent.com/prototypeall850-creator/multacd/main/scripts/install.sh -o ./m-install.sh && bash ./m-install.sh && rm ./m-install.sh
             ```
 
             Termux (binary rilis tidak kompatibel — pakai pip):
