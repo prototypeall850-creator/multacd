@@ -1,6 +1,6 @@
 # multacd — ROADMAP.md
-> Gambaran besar semua phase dari awal sampai selesai
-> Diupdate setiap selesai satu phase
+> Gambaran besar semua phase + panduan post-v1.0.0
+> Update file ini setiap kali phase selesai atau ada rencana baru
 
 ---
 
@@ -8,263 +8,194 @@
 
 | Phase | Nama | Status |
 |---|---|---|
-| Phase 1 | Foundation | ✅ Selesai |
-| Phase 2 | Coding Agent | ✅ Selesai |
-| Phase 3 | Research Agent | ✅ Selesai |
-| Phase 4 | Personal Agent | ✅ Done |
-| Phase 5 | Polish & Distribution | 📋 Planned |
+| Phase 1 | Foundation | selesai |
+| Phase 2 | Coding Agent | selesai |
+| Phase 3 | Research Agent | selesai |
+| Phase 4 | Personal Agent | selesai |
+| Phase 5 | Polish & Distribution | selesai |
+| v1.0.0 | Release | ✅ 2026-09-11 (PyPI + 4 binary + docs) |
 
 ---
 
-## Phase 1 — Foundation ✅
-
-**Tujuan:** Pondasi yang ketiga mode agent berdiri di atasnya.
+## Phase 1 — Foundation
 
 ```
 Deliverable:
-  ✅ BYOK config system (~/.multacd/config.yaml)
-  ✅ LiteLLM integration (semua provider)
-  ✅ ReAct agent loop
-  ✅ Permission system (auto-approved vs ask)
-  ✅ Tool system dasar (read, write, shell, git, memory)
-  ✅ Long-term memory (SQLite)
-  ✅ TUI interaktif (Textual)
-  ✅ Cross-platform: Linux, macOS, Windows, Termux
+  BYOK config system (~/.multacd/config.yaml)
+  LiteLLM integration (semua provider)
+  ReAct agent loop
+  Permission system (auto-approved vs ask)
+  Tool system dasar (read, write, shell, git, memory)
+  Long-term memory (SQLite)
+  TUI interaktif (Textual)
+  Cross-platform: Linux, macOS, Windows, Termux
 ```
 
 ---
 
-## Phase 2 — Coding Agent ✅
-
-**Tujuan:** multacd jadi AI coding partner yang ngerti project kamu.
+## Phase 2 — Coding Agent
 
 ```
 Deliverable:
-  ✅ Codebase awareness (auto-scan saat startup)
-  ✅ Deteksi jenis project (Python, Node, dll)
-  ✅ Code execution — Python (run, capture output, timeout)
-     ⏳ streaming output real-time → issue #3
-  ✅ Linting — ruff (check + auto-fix)
-  ✅ Testing — pytest (run all / run specific)
-  ✅ Smart Git Flow:
-        auto git_status saat startup
-        LLM generate conventional commit message (prompt-driven)
-        ⏳ diff preview + dialog approve sebelum commit → issue #4
-        branch protection untuk main/master (tool-level)
-        AI-assisted merge conflict resolution (tool + prompt)
-  ✅ Mode switching (/code, /research, /personal, /clear, /scan, /model, /help, /soul)
-  ✅ TUI enhancement:
-        file tree panel (toggle Ctrl+T)
-        git status di status bar (branch + changed files)
-        diff viewer dengan syntax highlight (toggle Ctrl+G)
-        ⏳ progress indicator live saat scan/test → issue #3
-
-Tools baru di Phase 2 (29 → 34):
-  run_python     jalankan file Python atau snippet
-  lint_python    lint dengan ruff, tampilkan error per baris
-  run_tests      jalankan pytest, tampilkan hasil per test
-  scan_codebase  scan & generate project context
-  git_merge      merge + lapor conflict ours-vs-theirs
+  soul.md system (kepribadian agent)
+  Codebase awareness (auto-scan saat startup)
+  Mode switching (/code, /research, /personal, /clear, /model, dll)
+  run_python (jalankan kode + streaming output)
+  lint_python (ruff)
+  run_tests (pytest)
+  Smart Git Flow (generated commit, diff preview, branch protection,
+                  AI-assisted merge conflict)
+  TUI: splash screen, info panel, model selector, permission bar,
+       file tree (kanan), expandable tool activity, thinking indicator,
+       slash command palette
 ```
-
-**Estimasi kompleksitas:** Sedang — tools baru tapi pattern sama dengan Phase 1.
 
 ---
 
-## Phase 3 — Research Agent ✅
-
-**Tujuan:** multacd bisa riset mendalam seperti Perplexity, multi-sumber, terstruktur.
+## Phase 3 — Research Agent
 
 ```
 Deliverable:
-  ✅ Web search integration:
-        5 provider BYOK (tavily, exa, brave, serpapi, duckduckgo)
-        1 interface — ganti provider = 2 baris config
-        ⏳ live Exa/Brave/SerpAPI/DDG → issue #5
-  ✅ Web scraping:
-        httpx + BeautifulSoup + markdownify, buang nav/ads/script
-        paywall → fallback snippet, error → failed (tidak crash)
-  ✅ Quick Research (ala Perplexity, ~30 detik)
-  ✅ Deep Research Mode:
-        multi-round (broad → followup dari gaps), berhenti dini/limit jujur
-        cross-reference + flag kontradiksi
-  ✅ Synthesis & Summary:
-        jawaban terstruktur berkutipan + laporan lengkap per seksi
-        export_research → .md + frontmatter
-  ✅ Mode /research di TUI:
-        Sources Panel (Ctrl+R): status per sumber, round, stats, export
-        klik sumber → preview di chat
-        ⏳ setup wizard search step → jatah fase DESIGN (issue #12)
-        ⏳ brief round di chat (hanya di panel) → issue #12
-  ✅ web_fetch Phase 1 tetap ada (web_scrape = versi pintar)
-
-Tools baru di Phase 3 (34 → 39):
-  web_search       cari via provider config (AUTO, tanpa konfirmasi)
-  web_scrape       extract konten bersih dari URL (ASK)
-  quick_research   orkestrasi riset cepat 1 round (ASK)
-  deep_research    orkestrasi multi-round + laporan (ASK)
-  export_research  simpan hasil riset ke file .md (ASK)
-```
-
-**Estimasi kompleksitas:** Sedang-Tinggi — perlu API eksternal (Brave/Serp), multi-step orchestration lebih kompleks.
-
-**Dependency tambahan:**
-```
-brave-search       # atau serpapi
-beautifulsoup4     # web scraping
-markdownify        # convert HTML ke markdown
+  Search provider system (Tavily, Exa, Brave, SerpAPI, DuckDuckGo — BYOK)
+  web_scrape (fetch + clean + markdown)
+  Quick Research (Perplexity-style, ~30 detik)
+  Deep Research (multi-round, ~2-5 menit)
+  Private tag system untuk data sensitif
+  Export hasil ke .md
+  /research mode aktif
+  Sources Panel TUI (Ctrl+R)
 ```
 
 ---
 
-## Phase 4 — Personal Agent ✅ (selesai: bot + scheduler + briefing + daemon + /personal)
-
-**Tujuan:** multacd bisa dikontrol dari mana saja, bukan hanya dari terminal.
+## Phase 4 — Personal Agent
 
 ```
 Deliverable:
-  [x] Telegram Gateway:
-        Bot terima perintah, agent loop per-user, konfirmasi Y/N,
-        typing indicator, /start /help /clear, /userbaru /hapususer /daftaruser
-        Keamanan: whitelist admin/user/stranger + notif admin
-        (package tg/ — bukan telegram/, hindari shadow python-telegram-bot #22)
-  [ ] WhatsApp Gateway (ditunda Phase 5 — mulai Telegram dulu sesuai catatan)
-  [x] Background Scheduler:
-        Cron 5 field + nama hari, tabel SQLite persist, mirror live saat start
-        Tool: schedule_job / cancel_job (ASK), get_jobs (AUTO)
-  [x] Daily Briefing:
-        todo + git + berita paralel, PrivacyFilter no-leak, kirim admin
-        Tool: generate_briefing (ASK)
-  [x] Mode /personal di TUI:
-        Prompt + 18 tool khusus, snapshot daemon saat switch,
-        kelola user/job/daemon/briefing dari chat
-  [x] Persistent background process:
-        daemon start/stop/status/logs, PID + log + IPC socket
-        Tanpa token → scheduler-only (bukan crash)
-
-Tools baru di Phase 4 (46 total):
-  send_telegram, schedule_job, cancel_job, get_jobs, daemon_status,
-  user_manager, generate_briefing
+  Telegram Bot (terima pesan, jalankan agent, kirim balik)
+  Access control (admin, user, stranger) dengan /userbaru command
+  File handling level 3 (terima & kirim file via Telegram)
+  Cron scheduler (APScheduler, persist SQLite)
+  Daily briefing (todo + berita + git status, privacy terlindungi)
+  Private tag system ([private] tidak pernah keluar ke LLM)
+  Daemon mode (jalan di background tanpa TUI)
+  /personal mode di TUI
 ```
-
-**Estimasi kompleksitas:** Tinggi — perlu setup bot, background process, keamanan akses.
-
-**Dependency tambahan:**
-```
-python-telegram-bot    # Telegram bot
-schedule               # job scheduler
-```
-
-**Catatan WhatsApp:**
-WhatsApp lebih kompleks dari Telegram. Opsi:
-- `whatsapp-web.py` (unofficial, butuh scan QR)
-- WhatsApp Business API (official, butuh akun bisnis)
-- Recommend: mulai Telegram dulu, WA belakangan.
 
 ---
 
-## Phase 5 — Polish & Distribution 📋
-
-**Tujuan:** multacd siap dipakai orang lain, bukan hanya kamu.
+## Phase 5 — Polish & Distribution
 
 ```
 Deliverable:
-  [ ] Installer satu perintah:
-        Linux/macOS : curl -fsSL install.sh | bash
-        Windows     : PowerShell script
-        Termux      : satu baris command
-  [ ] Auto-update mechanism:
-        Cek versi baru saat startup (sekali sehari)
-        Notifikasi kalau ada update
-        Perintah: multacd update
-  [ ] Plugin system:
-        User bisa tambah tool custom
-        Format: file Python di ~/.multacd/plugins/
-        multacd auto-load saat startup
-  [ ] Documentation:
-        Docs lengkap di GitHub
-        GIF demo di README
-        Contoh use case per mode
-  [ ] Packaging:
-        Publish ke PyPI: pip install multacd
-        Bisa langsung: python -m multacd
-  [ ] Testing:
-        Unit test per tool
-        Integration test untuk agent loop
-        CI/CD dengan GitHub Actions
-  [ ] Theming:
-        Lebih dari sekedar dark/light
-        Custom color scheme di config.yaml
-```
-
-**Estimasi kompleksitas:** Rendah-Sedang — ini polish, bukan fitur baru besar.
-
----
-
-## Dependency Master List
-
-```
-Phase 1 (sudah install):
-  textual, litellm, pyyaml, pydantic, httpx
-
-Phase 2 (tambahan, sudah install):
-  ruff, pytest
-  (gitpython TIDAK jadi dipakai — git via subprocess, tanpa dep baru)
-
-Phase 3 (tambahan):
-  beautifulsoup4, markdownify
-  + pilih salah satu search API:
-    brave-search ATAU serpapi
-
-Phase 4 (tambahan):
-  python-telegram-bot, schedule
-
-Phase 5 (tambahan):
-  pytest (sudah ada Phase 2), build, twine
+  Test suite (unit + integration)
+  CI/CD (GitHub Actions: test, build binary, release)
+  Plugin system (~/.multacd/plugins/)
+  Auto-update (cek PyPI, notif kalau ada versi baru)
+  PyInstaller binary (Linux x86_64, Linux ARM64, macOS Intel,
+                       macOS Apple Silicon, Windows, Termux)
+  Installer: install.sh (Linux/macOS/Termux), install.ps1 (Windows)
+  pip install multacd
+  README.md + demo GIF
+  CHANGELOG.md
+  CONTRIBUTING.md
+  Docs site (GitHub Pages + MkDocs)
+  GitHub templates (issue + PR)
+  MIT License
 ```
 
 ---
 
-## Evolusi Struktur Folder
+## v1.0.0
 
 ```
-Phase 1:
-  core/, tools/, tui/, memory/
+Semua Phase 1-5 selesai.
+Semua platform terinstall dan tertest.
+Dokumentasi lengkap.
+Repo public, CI/CD jalan.
 
-Phase 2 (tambahan):
-  tools/code/        → run_python, lint_python, run_tests
-  tools/codebase/    → scan_codebase, project_context
-
-Phase 3 (tambahan):
-  tools/research/    → web_search, web_scrape, deep_research
-
-Phase 4 (tambahan):
-  tools/messaging/   → send_telegram, send_whatsapp
-  tools/scheduler/   → schedule_job, get_jobs
-  daemon/            → background process handler
-
-Phase 5 (tambahan):
-  plugins/           → user plugin directory
-  tests/             → semua unit & integration test
-  docs/              → dokumentasi
+Install:
+  Linux/macOS/Termux : curl -fsSL https://get.multacd.dev | bash
+  Windows            : irm https://get.multacd.dev/install.ps1 | iex
+  pip                : pip install multacd
 ```
 
 ---
 
-## Prinsip yang Dijaga di Semua Phase
+## Panduan Post-v1.0.0
+
+### Dokumen yang Tetap Hidup
 
 ```
-1. Cross-platform          → Linux, macOS, Windows, Termux
-2. BYOK                    → user selalu bawa API key sendiri
-3. Config di ~/.multacd/   → project folder tetap bersih
-4. Permission system       → agent tidak bisa seenaknya
-5. Streaming real-time     → tidak nunggu, langsung tampil
-6. Error messages friendly → tidak ada traceback mentah
-7. Graceful degradation    → kalau satu fitur gagal,
-                             sisanya tetap jalan
+ROADMAP.md   → planning fitur baru (update di sini)
+DESIGN.md    → keputusan desain/TUI (update kalau ada perubahan UI)
+CHANGELOG.md → track tiap versi (isi tiap release)
+```
+
+### Dokumen yang Boleh Dihapus Setelah Dipakai
+
+```
+PLAN.md, PLAN-phase2.md, PLAN-phase3.md,
+PLAN-phase4.md, PLAN-phase5.md
+
+Tugasnya sudah selesai — informasinya sudah "pindah" ke kode.
+Hapus untuk menjaga repo tetap bersih.
+Kalau mau disimpan sebagai arsip → pindah ke folder /archive/
+```
+
+### Workflow untuk Fitur Baru (post v1.0.0)
+
+```
+1. Tulis ide di ROADMAP.md → section "Planned"
+2. Kalau fitur kecil (1-3 hari) → langsung buat branch + PR
+3. Kalau fitur besar → buat PLAN-namafitur.md dulu
+4. Kalau ada perubahan UI/TUI → update DESIGN.md dulu
+5. Setelah merge → pindah dari "Planned" ke versi yang tepat di ROADMAP
+6. Update CHANGELOG.md
+7. Tag versi baru → CI/CD handle sisanya
+```
+
+### Semantic Versioning
+
+```
+v1.0.x   → bug fixes (patch)
+           Contoh: v1.0.1, v1.0.2
+           Tidak ada fitur baru, hanya perbaikan
+
+v1.x.0   → fitur baru, backward-compatible (minor)
+           Contoh: v1.1.0, v1.2.0
+           Tambah fitur tanpa merusak yang sudah ada
+
+vx.0.0   → breaking changes (major)
+           Contoh: v2.0.0
+           Config format berubah, tool API berubah, dll
+```
+
+---
+
+## Planned — Post v1.0.0
+
+> Catat ide fitur di sini. Belum ada komitmen kapan dikerjakan.
+
+```
+Fitur yang mungkin masuk v1.1.0:
+  WhatsApp gateway (via whatsapp-web.py)
+  Weather integration untuk daily briefing
+  Google Calendar integration (via plugin)
+  More themes (Tokyo Night, Nord, Dracula)
+
+Fitur yang mungkin masuk v1.2.0:
+  LSP integration (Language Server Protocol) untuk coding agent
+  Multi-project workspace (bisa kelola beberapa project sekaligus)
+  Voice input (via Whisper API)
+
+Fitur yang mungkin masuk v2.0.0:
+  Plugin marketplace (cari & install plugin dari registry online)
+  Team mode (shared agent untuk beberapa user di jaringan yang sama)
 ```
 
 ---
 
 *multacd ROADMAP.md*
-*Update status setiap kali selesai satu phase.*
+*Update status dan planned features di sini.*
+*Untuk detail implementasi, buat PLAN-namafitur.md.*
