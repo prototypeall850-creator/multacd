@@ -1,0 +1,34 @@
+site_name: multacd
+site_url: https://prototypeall850-creator.github.io/multacd/
+repo_url: https://github.com/prototypeall850-creator/multacd
+docs_dir: .
+site_dir: ../site
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Ganti ke terang
+    - scheme: default
+      primary: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Ganti ke gelap
+  features:
+    - navigation.tabs
+    - search.suggest
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Install: install.md
+  - Quickstart: quickstart.md
+  - Configuration: configuration.md
+  - Modes:
+    - Coding Agent: modes/coding.md
+    - Research Agent: modes/research.md
+    - Personal Agent: modes/personal.md
+  - Plugins: plugins.md
