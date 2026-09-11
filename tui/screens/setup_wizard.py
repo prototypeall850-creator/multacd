@@ -69,6 +69,22 @@ def prefix_model(provider_id: str, model: str) -> str:
     return f"{provider_id}/{model}"
 
 
+def curated_models(provider_id: str) -> list[str]:
+    """Daftar model kurasi instan (tanpa network) buat provider ini.
+
+    Dipakai wizard biar step model langsung tampil — live fetch jalan
+    paralel di background lalu merge. Custom → [] (ketik manual).
+    """
+    try:
+        from tui.widgets.model_selector import CATALOG
+    except Exception:
+        return []
+    want = {"anthropic": "Anthropic", "openai": "OpenAI",
+            "gemini": "Google", "groq": "Groq",
+            "ollama": "Ollama (local)"}.get(provider_id, "")
+    return [n for p, ms in CATALOG for n, _ in ms if p == want]
+
+
 def prev_step(step: int, *, needs_key: bool,
               search_key_shown: bool, telegram_on: bool) -> int:
     """Langkah mundur dari `step` (pure function, gampang dites).
@@ -239,11 +255,6 @@ class SetupWizard(Screen):
                 password=True, id="wiz-input"))
             self._hint("Enter lanjut · Esc kembali · karakter disembunyikan")
             self.query_one("#wiz-input", Input).focus()
-        elif self.step == 4:
-            await body.mount(Static("Setup (4/6) — Model\nFetching..."))
-            self._hint("tunggu sebentar... (Esc = kembali)")
-            self._fetch_gen += 1
-            self.run_worker(self._load_models())
         elif self.step == 5:
             await body.mount(Static(
                 "Setup (4/6) — Model" + (
@@ -256,7 +267,11 @@ class SetupWizard(Screen):
                 await body.mount(ListView(
                     *[ListItem(Label(m)) for m in self.models[:20]],
                     id="wiz-list"))
-            self._hint("Ketik manual lalu Enter · klik list · Esc kembali")
+            else:
+                # List kosong (custom provider) — wadah buat merge live.
+                await body.mount(ListView(id="wiz-list"))
+            self._hint("sinkron live... · Ketik manual lalu Enter · "
+                       "klik list · Esc kembali")
             with suppress(Exception):
                 self.query_one("#wiz-input", Input).focus()
         elif self.step == 6:
@@ -321,24 +336,59 @@ class SetupWizard(Screen):
             await body.mount(Button("Simpan & Mulai [Enter]", id="wiz-save"))
             await body.mount(Button("Ulangi Setup", id="wiz-restart"))
             self._hint("Enter simpan · Ctrl+C batal")
-        # Tombol Kembali di semua step isi (kecuali welcome/fetch/final).
+        # Tombol Kembali di semua step isi (kecuali welcome/final).
         # Termux tak selalu punya Esc — tombol ini yang utama di HP.
-        if self.step not in (0, 4, 11):
+        if self.step not in (0, 11):
             await body.mount(Button("← Kembali [Esc]", id="wiz-back"))
 
-    async def _load_models(self) -> None:
-        gen = self._fetch_gen
+    async def _to_model_step(self) -> None:
+        """Masuk step model: kurasi instan langsung tampil, live paralel.
+
+        Dulu: layar 'Fetching...' 15 dtk. Sekarang: list kurasi muncul
+        seketika (bisa langsung pilih/ketik), fetch asli jalan di
+        background lalu merge diam-diam kalau masih di step ini.
+        """
+        self.models = curated_models(self.provider.id)
+        if not self.model and self.models:
+            self.model = prefix_model(self.provider.id, self.models[0])
+        self.fetch_error = ""
+        self._fetch_gen += 1
+        self.step = 5
+        self._show()
+        self.run_worker(self._load_models_live(self._fetch_gen))
+
+    async def _load_models_live(self, gen: int) -> None:
+        """Fetch live di background; merge ke list kalau user masih di sini."""
         base = self.api_base or self.provider.default_base
         models, err = await asyncio.to_thread(
             self.fetch_models_fn, self.provider.id, base, self.api_key)
-        if gen != self._fetch_gen:
-            return  # user Back saat fetch — hasil basi dibuang
-        self.models = models
-        self.fetch_error = err
+        if gen != self._fetch_gen or self.step != 5:
+            return  # basi: user pindah/back — buang
         if models and not err:
-            self.model = prefix_model(self.provider.id, models[0])
-        self.step = 5
-        self._show()
+            self.models = models
+            self.fetch_error = ""
+            if not self.model:
+                self.model = prefix_model(self.provider.id, models[0])
+        else:
+            self.fetch_error = err  # kurasi tetap tampil + notice error
+        self._refresh_model_list()
+
+    def _refresh_model_list(self) -> None:
+        """Update ListView + hint di tempat (input ketikan user aman)."""
+        try:
+            lst = self.query_one("#wiz-list", ListView)
+        except Exception:
+            return
+        with suppress(Exception):
+            lst.clear()
+            for m in self.models[:20]:
+                lst.append(ListItem(Label(m)))
+            if self.fetch_error:
+                self._hint(f"live gagal ({self.fetch_error}) — list kurasi. "
+                           "Esc kembali")
+            elif self.models:
+                self._hint("live ✓ · Ketik manual lalu Enter · klik list · "
+                           "Esc kembali")
 
     def _back_args(self) -> dict[str, bool]:
         return {
@@ -368,13 +418,18 @@ class SetupWizard(Screen):
                 self.api_key = "none"  # ollama keyless, tetap bisa ubah base
         elif self.step == 2:
             self.api_base = value.strip()
-            self.step = 4 if not self.provider.needs_key else 3
+            if not self.provider.needs_key:
+                self.api_key = "none"  # ollama keyless, tetap bisa ubah base
+                await self._to_model_step()
+                return
+            self.step = 3
         elif self.step == 3:
             if not value.strip():
                 self._hint("API key wajib diisi (atau Ctrl+C batal).")
                 return
             self.api_key = value.strip()
-            self.step = 4
+            await self._to_model_step()
+            return
         elif self.step == 5:
             # List diklik → on_list_view_selected yang urus; Enter manual:
             if value.strip():
@@ -548,4 +603,9 @@ if __name__ == "__main__":
     assert prev_step(5, **skip) == 2 and prev_step(4, **skip) == 2
     assert prev_step(8, **skip) == 6 and prev_step(11, **skip) == 8
     assert prev_step(0, **full) == 0  # mentok, diam
+    # Kurasi instan: per provider tanpa network; custom → manual.
+    assert curated_models("groq") == ["llama-3.3-70b-versatile",
+                                      "llama-3.1-8b-instant"]
+    assert curated_models("ollama") == ["llama3.2", "qwen2.5-coder"]
+    assert curated_models("custom") == []
     print("✅ setup_wizard self-test OK (prefix + metadata + back-nav)")

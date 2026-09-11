@@ -144,7 +144,9 @@ class ModelSelector(Vertical):
     def __init__(self) -> None:
         super().__init__(id="model-selector")
         self._pool: list[tuple[str, str, str]] = []
-        self._matches: list[tuple[str, str, str]] = []
+        # Baris tampil: ("head", label) header tak-bisa-dipilih |
+        # ("item", provider, name, tag).
+        self._rows: list[tuple] = []
         self._index = 0
         self._query = ""
         self._recent: list[str] = []
@@ -161,9 +163,10 @@ class ModelSelector(Vertical):
 
     @property
     def selected(self) -> str | None:
-        if not self._matches:
+        if not self._rows or self._index >= len(self._rows):
             return None
-        return self._matches[self._index][1]
+        row = self._rows[self._index]
+        return row[2] if row[0] == "item" else None
 
     def open(self, config_model: str = "") -> None:
         self._pool = for_configured(config_model)
@@ -175,8 +178,7 @@ class ModelSelector(Vertical):
                 if m[1] not in self._favorites and m[1] not in self._recent]
         self._pool = fav + rec + rest
         self._query = ""
-        self._matches = list(self._pool)
-        self._index = 0
+        self._layout_rows(self._pool, grouped=True)
         self._rebuild()
         self.display = True
 
@@ -184,19 +186,57 @@ class ModelSelector(Vertical):
         if not self.display:
             return
         self._query = query
-        self._matches = match_models(query, self._pool)
-        self._index = 0
+        matches = match_models(query, self._pool)
+        # Query kosong → grouped + header; ada query → flat (bersih).
+        self._layout_rows(matches, grouped=not query.strip())
         self._rebuild()
+
+    def _layout_rows(self, models: list[tuple[str, str, str]],
+                     grouped: bool) -> None:
+        """Susun baris tampil + index awal ke item pertama."""
+        rows: list[tuple] = []
+        if not grouped:
+            rows = [("item", p, n, t) for p, n, t in models]
+        else:
+            fav = [m for m in models if m[1] in self._favorites]
+            rec = [m for m in models
+                   if m[1] in self._recent and m[1] not in self._favorites]
+            rest = [m for m in models
+                    if m[1] not in self._favorites and m[1] not in self._recent]
+            if fav:
+                rows.append(("head", "★ Favorites"))
+                rows += [("item", p, n, t) for p, n, t in fav]
+            if rec:
+                rows.append(("head", "Recent"))
+                rows += [("item", p, n, t) for p, n, t in rec]
+            seen: set[str] = set()
+            for p, n, t in rest:
+                if p not in seen:
+                    rows.append(("head", p))
+                    seen.add(p)
+                rows.append(("item", p, n, t))
+        self._rows = rows
+        self._index = next((i for i, r in enumerate(rows) if r[0] == "item"),
+                           0)
 
     def close(self) -> None:
         self.display = False
-        self._matches = []
+        self._rows = []
         self._index = 0
 
+    @property
+    def _matches(self) -> list[tuple[str, str, str]]:
+        """Item cocok (tanpa header) — kompat uji lama + favorit/recent."""
+        return [(r[1], r[2], r[3]) for r in self._rows if r[0] == "item"]
+
     def move(self, delta: int) -> None:
-        if not self._matches:
+        if not self._rows:
             return
-        self._index = (self._index + delta) % len(self._matches)
+        n = len(self._rows)
+        for _ in range(n):  # lompat header, tak pernah infinite
+            self._index = (self._index + delta) % n
+            if self._rows[self._index][0] == "item":
+                break
         self._highlight()
 
     def toggle_favorite(self) -> str | None:
@@ -228,19 +268,37 @@ class ModelSelector(Vertical):
             self.query_one("#model-query", Static).update(
                 f"Search: {self._query or '...'}  (ctrl+f favorite)")
         lst.clear()
-        for provider, name, tag in self._matches:
-            star = "*" if name in self._favorites else " "
-            tag_s = f"  [{tag}]" if tag else ""
-            lst.append(ListItem(Label(f"{star} {name}  ({provider}){tag_s}")))
+        for row in self._rows:
+            if row[0] == "head":
+                item = ListItem(Label(f"── {row[1]} ──"), disabled=True)
+            else:
+                _, provider, name, tag = row
+                star = "*" if name in self._favorites else " "
+                tag_s = f"  [{tag}]" if tag else ""
+                item = ListItem(Label(f"{star} {name}  ({provider}){tag_s}"))
+            lst.append(item)
         self._highlight()
 
     def _highlight(self) -> None:
         try:
             lst = self.query_one("#model-list", ListView)
-            if self._matches:
+            if self._rows:
                 lst.index = self._index
         except Exception:
             pass
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        """Klik/tap item → lompat ke barisnya lalu pilih (kayak palette)."""
+        try:
+            idx = list(self.query_one("#model-list", ListView).children).index(
+                event.item)
+        except ValueError:
+            return
+        if 0 <= idx < len(self._rows) and self._rows[idx][0] == "item":
+            self._index = idx
+            screen = self.screen
+            if hasattr(screen, "model_select"):
+                screen.model_select()
 
 
 if __name__ == "__main__":
@@ -255,4 +313,23 @@ if __name__ == "__main__":
     assert any(m == "llama-3.3-70b-versatile" for _, m, _ in pool)
     assert any(p == "Ollama (local)" for p, _, _ in pool)  # lokal selalu ada
     assert load_favorites() == [] or isinstance(load_favorites(), list)
-    print("✅ model_selector self-test OK (katalog + fuzzy)")
+    # Grouping: header tak-bisa-dipilih, navigasi lompat header.
+    sel = ModelSelector.__new__(ModelSelector)
+    sel._rows = []
+    sel._index = 0
+    sel._recent = []
+    sel._favorites = []
+    sel._layout_rows([("Groq", "a", ""), ("Groq", "b", "Free"),
+                      ("OpenAI", "c", "")], grouped=True)
+    kinds = [r[0] for r in sel._rows]
+    assert kinds == ["head", "item", "item", "head", "item"], kinds
+    assert sel.selected == "a"
+    sel.move(1)
+    assert sel.selected == "b", sel.selected
+    sel.move(1)  # lompat header OpenAI
+    assert sel.selected == "c", sel.selected
+    sel.move(-1)
+    assert sel.selected == "b", sel.selected
+    sel._layout_rows([("Groq", "a", "")], grouped=False)
+    assert [r[0] for r in sel._rows] == ["item"] and sel.selected == "a"
+    print("✅ model_selector self-test OK (katalog + fuzzy + grouping)")
