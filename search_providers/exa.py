@@ -55,7 +55,7 @@ class ExaProvider(SearchProvider):
             from exa_py import Exa
         except ImportError as e:
             raise SearchProviderError(
-                "SDK exa-py belum install. Jalankan: pip install exa-py"
+                'SDK exa-py belum install. Jalankan: pip install "multacd[exa]"'
             ) from e
         try:
             client = Exa(api_key=self._api_key)
