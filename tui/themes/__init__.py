@@ -1,12 +1,9 @@
-"""Catppuccin themes buat multacd (lihat DESIGN.md §2).
+"""multacd themes v2 — identitas sendiri + Catppuccin kompatibel.
 
-Default: catppuccin-mocha (dark). Varian: latte (light), frappe,
-macchiato. Palette per DESIGN.md — slot Textual Theme + variables
-tambahan (peach/teal/sapphire/lavender/overlay/subtext) yang dipakai
-widget via var(--peach) dll.
-
-Test cepat:
-    python -m tui.themes.catppuccin
+Default: multacd-dark (turunan Mocha, aksen sapphire khas + kontras
+dinaikkan buat layar HP). Varian: multacd-light, multacd-min
+(16 warna sistem buat Termux hemat). 4 Catppuccin lama tetap ada
+biar config v1 tidak crash — full bebas tapi config lama kebaca.
 """
 
 from __future__ import annotations
@@ -113,18 +110,98 @@ MACCHIATO = Theme(
     },
 )
 
-THEMES = (MOCHA, LATTE, FRAPPE, MACCHIATO)
-DEFAULT_THEME = "catppuccin-mocha"
+MULTACD_DARK = Theme(
+    name="multacd-dark",
+    dark=True,
+    primary="#74c7ec",      # Sapphire khas — beda dari Catppuccin Blue
+    secondary="#94e2d5",    # Teal
+    accent="#cba6f7",       # Mauve
+    foreground="#dbe1f5",   # Text Mocha + kontras naik (HP)
+    background="#16161f",   # Base lebih pekat dari Mocha
+    surface="#262633",      # card
+    panel="#101016",        # deep
+    success="#a6e3a1",
+    warning="#f9e2af",
+    error="#f38ba8",
+    boost="#3a3a4d",
+    variables={
+        "subtext": "#b4bad6",  # dinaikkan (Overlay lama kelewat redup di HP)
+        "overlay": "#8b91a8",
+        "peach": "#fab387",
+        "teal": "#94e2d5",
+        "sapphire": "#74c7ec",
+        "lavender": "#b4befe",
+        "success-dim": "#585b70",
+    },
+)
 
-# Alias kompatibel config lama (dark/light era Phase 2).
+MULTACD_LIGHT = Theme(
+    name="multacd-light",
+    dark=False,
+    primary="#209fb5",
+    secondary="#179299",
+    accent="#8839ef",
+    foreground="#3a3d55",   # lebih pekat dari Latte
+    background="#f2f3f7",
+    surface="#d8dbe4",
+    panel="#e8eaf0",
+    success="#328a24",
+    warning="#c7740a",
+    error="#c20f33",
+    boost="#c2c6d2",
+    variables={
+        "subtext": "#5c5f77",
+        "overlay": "#8a8da0",
+        "peach": "#e85a0c",
+        "teal": "#179299",
+        "sapphire": "#209fb5",
+        "lavender": "#5a6cf5",
+        "success-dim": "#acb0be",
+    },
+)
+
+MULTACD_MIN = Theme(
+    name="multacd-min",
+    dark=True,
+    # 16 warna sistem — aman di Termux tanpa truecolor, tanpa animasi.
+    primary="cyan",
+    secondary="cyan",
+    accent="magenta",
+    foreground="white",
+    background="black",
+    surface="black",
+    panel="black",
+    success="green",
+    warning="yellow",
+    error="red",
+    boost="black",
+    variables={
+        "subtext": "white",
+        "overlay": "white",
+        "peach": "yellow",
+        "teal": "cyan",
+        "sapphire": "cyan",
+        "lavender": "white",
+        "success-dim": "white",
+    },
+)
+
+THEMES = (MOCHA, LATTE, FRAPPE, MACCHIATO, MULTACD_DARK, MULTACD_LIGHT, MULTACD_MIN)
+DEFAULT_THEME = "multacd-dark"
+
+# Alias kompatibel config lama (dark/light era Phase 2) + v1 catppuccin.
+# Full bebas v2: default pindah ke identitas sendiri, catppuccin tetap bisa dipilih.
 THEME_ALIASES = {
-    "dark": "catppuccin-mocha",
-    "light": "catppuccin-latte",
+    "dark": "multacd-dark",
+    "light": "multacd-light",
+    "catppuccin": "catppuccin-mocha",
+    "mocha": "catppuccin-mocha",
+    "latte": "catppuccin-latte",
 }
 
 
 def resolve_theme_name(name: str) -> str:
-    """'dark' → 'catppuccin-mocha', dst. Tidak dikenal → default."""
+    """'dark' → 'multacd-dark', dst. Tidak dikenal → default."""
     name = (name or "").lower().strip()
     if name in THEME_ALIASES:
         return THEME_ALIASES[name]

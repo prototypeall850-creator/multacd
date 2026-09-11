@@ -24,8 +24,8 @@ LEVELS = ("nerdfonts", "unicode", "ascii")
 
 # glyph per level: (nerdfonts, unicode, ascii)
 _ICONS: dict[str, tuple[str, str, str]] = {
-    "app": ("⚡", "⚡", "[*]"),           # logo (emoji cukup universal)
-    "mode": ("💻", "💻", "[>]"),          # mode label
+    "app": ("⚡", "*", "[*]"),             # v2: unicode tanpa emoji 2-cell
+    "mode": ("💻", ">", "[>]"),          # (Termux font kecil aman)
     "folder": ("\uf07b", "*", "[+]"),
     "file": ("\uf15b", "-", "--"),
     "python": ("\ue73c", "~", "(py)"),
@@ -55,9 +55,22 @@ _level: str = "unicode"
 
 
 def detect_level() -> str:
-    """Auto: ascii kalau terminal terbatas, else unicode."""
+    """Auto: ascii kalau terminal terbatas, else unicode.
+
+    v2: hormati NO_EMOJI/NO_COLOR/TERMUX sempit → ascii (jalur utama HP).
+    Nerd Fonts tetap opt-in via config (probe render tak andal di Textual).
+    """
     if os.environ.get("TERM") == "dumb":
         return "ascii"
+    if os.environ.get("NO_EMOJI") is not None or os.environ.get("NO_COLOR") is not None:
+        return "ascii"
+    if "TERMUX_VERSION" in os.environ:
+        try:
+            cols = int(os.environ.get("COLUMNS", "80") or 80)
+        except ValueError:
+            cols = 80
+        if cols < 70 or os.environ.get("MULTACD_MIN") == "1":
+            return "ascii"
     enc = (locale.getpreferredencoding(False) or "").lower()
     if "utf" not in enc:
         return "ascii"
@@ -109,6 +122,12 @@ if __name__ == "__main__":
             del os.environ["TERM"]
         else:
             os.environ["TERM"] = _old
+    # v2: NO_EMOJI / Termux sempit → ascii
+    os.environ["NO_EMOJI"] = "1"
+    try:
+        assert setup("auto") == "ascii"
+    finally:
+        del os.environ["NO_EMOJI"]
     assert setup("auto") == detect_level() and active_level() in LEVELS
     assert icon("tidak-ada") == "tidak-ada"  # unknown → passthrough
     print("✅ icons self-test OK (tabel + setup + auto)")

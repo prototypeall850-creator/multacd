@@ -63,9 +63,8 @@ ask_before_bash: true        # bash → konfirmasi dulu
 ask_before_web: true         # web_fetch → konfirmasi dulu
 
 # ── Display Settings ─────────────────────────────────
-theme: "dark"                # dark | light | catppuccin-mocha | catppuccin-latte
-                             # | catppuccin-frappe | catppuccin-macchiato
-                             # (dark/light = alias mocha/latte)
+theme: "dark"                # dark | light (= multacd-dark/light)
+                             # + multacd-min (Termux hemat) | catppuccin-* (kompat v1)
 show_tool_calls: true        # tampilkan nama tool yang dijalankan
 show_thinking: false         # tampilkan reasoning LLM (verbose mode)
 icon_style: "auto"           # auto | nerdfonts | unicode | ascii
@@ -161,7 +160,8 @@ class Config(BaseModel):
     ask_before_web: bool = True
 
     # ── Display settings ──
-    theme: Literal["dark", "light", "catppuccin-mocha", "catppuccin-latte",
+    theme: Literal["dark", "light", "multacd-dark", "multacd-light",
+                   "multacd-min", "catppuccin-mocha", "catppuccin-latte",
                    "catppuccin-frappe", "catppuccin-macchiato"] = "dark"
     show_tool_calls: bool = True
     show_thinking: bool = False
