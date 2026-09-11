@@ -62,7 +62,9 @@ SELF_TEST_MODULES = [
     "search_providers.duckduckgo",
     "search_providers",
     "briefing.privacy",
-    "telegram.access_control",
+    "tg.access_control",
+    "tg.handlers",
+    "tg.bot",
 ]
 
 

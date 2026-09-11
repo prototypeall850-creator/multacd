@@ -9,7 +9,7 @@ add/remove_update config model in-memory; save_to(path) patch yaml di disk
 (tanpa menghapus key lain/komentar struktur — baca, update, tulis ulang).
 
 Test cepat:
-    python -m telegram.access_control
+    python -m tg.access_control
 """
 
 from __future__ import annotations
