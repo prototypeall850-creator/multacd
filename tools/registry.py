@@ -78,6 +78,14 @@ from tools.memory.recall import SCHEMA as RECALL_SCHEMA
 from tools.memory.recall import recall
 from tools.memory.remember import SCHEMA as REMEMBER_SCHEMA
 from tools.memory.remember import remember
+from tools.personal.cancel_job import SCHEMA as CANCEL_JOB_SCHEMA
+from tools.personal.cancel_job import cancel_job
+from tools.personal.daemon_status import SCHEMA as DAEMON_STATUS_SCHEMA
+from tools.personal.daemon_status import daemon_status
+from tools.personal.get_jobs import SCHEMA as GET_JOBS_SCHEMA
+from tools.personal.get_jobs import get_jobs
+from tools.personal.schedule_job import SCHEMA as SCHEDULE_JOB_SCHEMA
+from tools.personal.schedule_job import schedule_job
 from tools.personal.send_telegram import SCHEMA as SEND_TELEGRAM_SCHEMA
 from tools.personal.send_telegram import send_telegram
 from tools.research.deep_research import SCHEMA as DEEP_RESEARCH_SCHEMA
@@ -149,6 +157,10 @@ TOOL_REGISTRY: dict[str, tuple[ToolFunc, dict[str, Any]]] = {
     "export_research": (export_research, EXPORT_RESEARCH_SCHEMA),
     # personal
     "send_telegram": (send_telegram, SEND_TELEGRAM_SCHEMA),
+    "schedule_job": (schedule_job, SCHEDULE_JOB_SCHEMA),
+    "cancel_job": (cancel_job, CANCEL_JOB_SCHEMA),
+    "get_jobs": (get_jobs, GET_JOBS_SCHEMA),
+    "daemon_status": (daemon_status, DAEMON_STATUS_SCHEMA),
 }
 
 # Fail-fast: registry dan permission harus 1:1. Kalau tidak sama,
@@ -197,7 +209,7 @@ if __name__ == "__main__":
     os.environ["MULTACD_HOME"] = tmp_home
 
     defs = get_tool_definitions()
-    assert len(defs) == len(KNOWN_TOOLS) == 40, len(defs)
+    assert len(defs) == len(KNOWN_TOOLS) == 44, len(defs)
     for d in defs:
         assert d["type"] == "function" and d["function"]["name"], d
 

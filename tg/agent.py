@@ -171,7 +171,7 @@ if __name__ == "__main__":
     from core.config import Config as _Config
     from core.llm_client import StreamDone, StreamText
 
-    # 1. Subset tool: 40 - 9 disabled = 31.
+    # 1. Subset tool: 44 - 9 disabled = 35.
     tools = telegram_tools()
     assert len(tools) == len(TOOL_REGISTRY) - len(TELEGRAM_DISABLED)
     assert "read_file" in tools and "delete_file" not in tools

@@ -69,6 +69,11 @@ SELF_TEST_MODULES = [
     "tg.handlers",
     "tg.bot",
     "tools.personal.send_telegram",
+    "tools.personal.schedule_job",
+    "tools.personal.cancel_job",
+    "tools.personal.get_jobs",
+    "tools.personal.daemon_status",
+    "scheduler.engine",
 ]
 
 
