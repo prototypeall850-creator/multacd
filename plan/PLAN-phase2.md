@@ -642,7 +642,7 @@ Ditampilkan saat:
   - User minta lihat perubahan
   - Conflict resolution
 
-Toggle: Ctrl+D
+Toggle: Ctrl+G (bukan Ctrl+D — dimakan Input sebagai delete-char)
 
 Format:
 ┌─ Git Diff ─────────────────────────────────────────┐
@@ -940,7 +940,7 @@ Tugas:
   [ ] Buat tui/widgets/diff_viewer.py:
         - Panel yang muncul saat ada diff untuk ditampilkan
         - Syntax highlight: merah untuk baris hapus, hijau untuk tambah
-        - Toggle dengan Ctrl+D
+        - Toggle dengan Ctrl+G
         - Dipanggil oleh git_commit flow sebelum user approve
 
   [ ] Tambah progress indicators:
@@ -951,7 +951,7 @@ Tugas:
   [ ] Update tui/screens/main_screen.py:
         - Susun layout baru: file_tree (opsional) + chat_panel
         - Handle Ctrl+T toggle file_tree
-        - Handle Ctrl+D toggle diff_viewer
+        - Handle Ctrl+G toggle diff_viewer
 
 Hasil: TUI lebih kaya informasi, file tree dan diff viewer bisa dipakai.
 ```
@@ -1048,7 +1048,7 @@ Smart Git Flow
 TUI
   ✅ Status bar: mode + branch + changed files
   ✅ File tree panel (toggle Ctrl+T)
-  ✅ Diff viewer (toggle Ctrl+D)
+  ✅ Diff viewer (toggle Ctrl+G)
   ✅ Progress indicators untuk operasi panjang
 ```
 
