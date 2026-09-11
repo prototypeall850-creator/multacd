@@ -197,7 +197,8 @@ Redesign v2 full bebas (dikerjakan sekarang, baseline Termux v0.119):
   Fondasi: token semantik + multacd-dark/light/min (done)
   Widget responsif: status compact, fuzzy palette, no-anim (done)
   Shell: splash v2 + layout hemat (done)
-  Sisa: model selector (S12), info panel (S11), sources tokens/cost
+  Done: model selector (S12, Ctrl+O + /model), info panel (S11, Ctrl+I)
+  Research context (round/sources/token ~) tampil di info panel mode /research
 ```
 
 ---
