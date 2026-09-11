@@ -41,9 +41,18 @@ def base_label(state: str) -> str:
 
 
 def dotted(base: str, n_dots: int) -> str:
-    """'thinking', 3 → 'thinking...'. Pure function."""
+    """'thinking', 3 → 'thinking...'. Pure function.
+
+    Min-mode (Termux hemat): tanpa titik animasi — hemat reflow/baterai.
+    """
     if not base:
         return ""
+    try:
+        from tui.tokens import should_animate as _anim
+        if not _anim():
+            return base
+    except Exception:
+        pass
     if base.endswith("..."):
         base = base[:-3]
     return f"{base}{'.' * n_dots}"
@@ -77,6 +86,12 @@ class ThinkingBar(Static):
     def _tick(self) -> None:
         if not self._base:
             return
+        try:
+            from tui.tokens import should_animate as _anim
+            if not _anim():
+                return  # min-mode: teks statis, tanpa repaint tiap 200ms
+        except Exception:
+            pass
         self._dots = self._dots % MAX_DOTS + 1
         self._paint()
 

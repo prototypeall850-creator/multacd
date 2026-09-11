@@ -20,15 +20,35 @@ from core.mode_manager import COMMANDS_WITH_ARGS, PALETTE_COMMANDS
 MATCH_STYLE = "#b4befe"  # Lavender — highlight bagian yang match
 
 
+def _score(needle: str, name: str) -> int | None:
+    """Skor match: 0 prefix, 1 substring, 2 subsequence (fuzzy). None = gagal."""
+    if name.startswith(needle):
+        return 0
+    if needle in name:
+        return 1
+    it = iter(name)
+    if all(ch in it for ch in needle):
+        return 2
+    return None
+
+
 def match_commands(typed: str) -> list[tuple[str, str]]:
-    """Filter command by prefix (case-insensitive). Pure function.
+    """Filter command fuzzy berperingkat (case-insensitive). Pure function.
 
     typed = teks setelah '/' sampai spasi pertama. '' → semua.
+    Urut: prefix dulu, lalu substring, lalu subsequence. v2 full-bebas:
+    '/md' ketemu '/model', 'R' tetap '/research' paling atas.
     """
     needle = typed.strip().lower()
     if not needle:
         return list(PALETTE_COMMANDS)
-    return [c for c in PALETTE_COMMANDS if c[0][1:].startswith(needle)]
+    scored: list[tuple[int, str, str]] = []
+    for cmd, desc in PALETTE_COMMANDS:
+        s = _score(needle, cmd[1:].lower())
+        if s is not None:
+            scored.append((s, cmd, desc))
+    scored.sort(key=lambda x: (x[0], x[1]))
+    return [(c, d) for _, c, d in scored]
 
 
 def render_item(cmd: str, desc: str, needle: str) -> Text:
@@ -124,8 +144,10 @@ class SlashPalette(Vertical):
 if __name__ == "__main__":
     assert len(match_commands("")) == len(PALETTE_COMMANDS) == 8
     assert [c for c, _ in match_commands("mo")] == ["/model"]
-    assert [c for c, _ in match_commands("R")] == ["/research"]
+    got_r = [c for c, _ in match_commands("R")]
+    assert got_r and got_r[0] == "/research"  # fuzzy: prefix menang
+    assert [c for c, _ in match_commands("md")] == ["/model"]  # fuzzy baru
     assert match_commands("zzz") == []
     t = render_item("/model", "Switch", "mo")
     assert str(t) == "/model      Switch"
-    print("✅ slash_palette self-test OK (filter + render)")
+    print("✅ slash_palette self-test OK (fuzzy + render)")
