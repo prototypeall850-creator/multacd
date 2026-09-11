@@ -90,15 +90,14 @@ def prev_step(step: int, *, needs_key: bool,
     """Langkah mundur dari `step` (pure function, gampang dites).
 
     Melompati step kondisional yang tak ditampilkan (keyless ollama,
-    search skip/duckduckgo, telegram skip). Step 4 (fetching) tak punya
-    tombol Back — tapi mapping tetap ada buat Esc.
+    search skip/duckduckgo, telegram skip). Step 5 (model) mundur ke
+    pengisi key/base — maju lagi = kurasi instan + fetch ulang.
     """
     back = {
         1: 0,
         2: 1,
         3: 2,
-        4: 3 if needs_key else 2,
-        5: 3 if needs_key else 2,  # mundur = isi ulang key/base (fetch ulang)
+        5: 3 if needs_key else 2,
         6: 5,
         7: 6,
         8: 7 if search_key_shown else 6,
@@ -596,11 +595,11 @@ if __name__ == "__main__":
     full = {"needs_key": True, "search_key_shown": True, "telegram_on": True}
     assert [prev_step(s, **full) for s in (1, 2, 3, 5, 6, 8, 11)] == \
         [0, 1, 2, 3, 5, 7, 10]
-    assert prev_step(4, **full) == 3 and prev_step(7, **full) == 6
+    assert prev_step(7, **full) == 6
     assert prev_step(9, **full) == 8 and prev_step(10, **full) == 9
     skip = {"needs_key": False, "search_key_shown": False,
             "telegram_on": False}
-    assert prev_step(5, **skip) == 2 and prev_step(4, **skip) == 2
+    assert prev_step(5, **skip) == 2
     assert prev_step(8, **skip) == 6 and prev_step(11, **skip) == 8
     assert prev_step(0, **full) == 0  # mentok, diam
     # Kurasi instan: per provider tanpa network; custom → manual.
