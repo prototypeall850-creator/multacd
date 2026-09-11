@@ -51,7 +51,7 @@ jobs:
       - run: pyinstaller multacd.spec --noconfirm
       - run: mv dist/multacd* dist/${{ matrix.output }}
         if: runner.os != 'Windows'
-      - run: Rename-Item dist/multacd.exe dist/${{ matrix.output }}
+      - run: Move-Item dist/multacd.exe dist/${{ matrix.output }}
         if: runner.os == 'Windows'
         shell: pwsh
       - run: dist/${{ matrix.output }} --version
