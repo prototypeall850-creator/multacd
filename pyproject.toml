@@ -1,7 +1,6 @@
 # multacd — packaging & tool config.
 # Runtime deps didefinisikan di [project] (single source buat pip);
 # requirements.txt dipertahankan buat setup venv cepat (mirror).
-# Versi: naikkan ke 1.0.0 saat Step 10 (＋ core/version.py FALLBACK).
 
 [build-system]
 requires = ["hatchling"]
@@ -9,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "multacd"
-version = "0.9.0"
+version = "1.0.0"
 description = "Agentic TUI for coding, research, and personal automation"
 readme = "README.md"
 requires-python = ">=3.10"

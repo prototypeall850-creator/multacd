@@ -2,7 +2,10 @@
 
 Format: Keep a Changelog. Versi: Semantic Versioning.
 
-## [Unreleased] (menuju 1.0.0)
+## [1.0.0] - 2026-09-11
+
+Rilis stabil pertama: coding + research + personal agent dalam satu TUI,
+install via binary, pip, atau source. Docs: https://prototypeall850-creator.github.io/multacd/
 
 ### Added (Phase 5 — Polish & Distribution)
 
@@ -37,4 +40,4 @@ Format: Keep a Changelog. Versi: Semantic Versioning.
 
 ## [0.9.0] - 2026-09-11
 
-- Pre-1.0 dev: entry point `multacd` + versi tunggal (internal).
+- Pre-1.0 dev: entry point `multacd` + versi tunggal (internal, tak dirilis).
