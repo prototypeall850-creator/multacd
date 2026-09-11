@@ -13,7 +13,7 @@ from typing import Any
 
 from core.config import Config
 from tg.access_control import AccessControl
-from tg.handlers import on_message
+from tg.handlers import on_file, on_message
 
 
 class MultacdBot:
@@ -39,10 +39,13 @@ class MultacdBot:
         self.app.bot_data["ac"] = self.ac
         self.app.bot_data["admin_username"] = config.telegram.admin_username
         self.app.bot_data["admin_id"] = config.telegram.admin_id
+        self.app.bot_data["config"] = config
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,
                                             on_message))
         # Command juga lewat route_message (support /userbaru@namabot).
         self.app.add_handler(MessageHandler(filters.COMMAND, on_message))
+        # Dokumen & foto → on_file (Step 5).
+        self.app.add_handler(MessageHandler(filters.ATTACHMENT, on_file))
         self.app.add_error_handler(self.on_error)
 
     @staticmethod
@@ -70,7 +73,7 @@ if __name__ == "__main__":
     _cfg = _Config(model="m", api_key="k", telegram={
         "bot_token": "123:ABC", "admin_id": 1, "admin_username": "u"})
     _bot = MultacdBot(_cfg)
-    assert len(_bot.app.handlers.get(0, [])) == 2, "text + command handler"
+    assert len(_bot.app.handlers.get(0, [])) == 3, "text + command + file"
     assert _bot.app.bot_data["admin_id"] == 1
 
     print("✅ bot self-test OK (guard + build + handlers)")

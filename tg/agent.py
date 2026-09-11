@@ -129,7 +129,7 @@ async def run_telegram_turn(update: Any, context: Any, text: str) -> None:
     """Jalankan satu turn agent, kirim jawaban final ke chat."""
     msg = update.effective_message or update.message
     user_id = update.effective_user.id
-    chat = update.effective_chat
+    chat = getattr(update, "effective_chat", None)
     chat_id = chat.id if chat is not None else user_id
     bot_data = context.bot_data
     config = bot_data["config"]
@@ -171,7 +171,7 @@ if __name__ == "__main__":
     from core.config import Config as _Config
     from core.llm_client import StreamDone, StreamText
 
-    # 1. Subset tool: 39 - 9 disabled = 30.
+    # 1. Subset tool: 40 - 9 disabled = 31.
     tools = telegram_tools()
     assert len(tools) == len(TOOL_REGISTRY) - len(TELEGRAM_DISABLED)
     assert "read_file" in tools and "delete_file" not in tools

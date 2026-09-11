@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from tg.access_control import AccessControl
+from tg.agent import resolve_pending
 
 # Batas pesan Telegram (formatter Step 4 juga pakai ini).
 TG_MAX_MESSAGE = 4096
@@ -45,7 +46,8 @@ WELCOME = ("Halo! Saya multacd personal agent.\n"
 HELP_USER = ("/start — pesan selamat datang\n"
              "/help — daftar perintah\n"
              "/clear — hapus history percakapan\n"
-             "/briefing — minta briefing sekarang")
+             "/briefing — minta briefing sekarang\n"
+             "Kirim file/gambar — agent download & proses")
 
 HELP_ADMIN = (HELP_USER + "\n"
               "/userbaru [id] — tambah user\n"
@@ -115,20 +117,17 @@ def route_message(user_id: int, username: str, text: str,
     return RouteResult(role, echo=True)
 
 
-async def on_message(update: Any, context: Any) -> None:
-    """Semua pesan → route. Stranger dibalas+notice; user/admin ke agent."""
-    from tg.agent import resolve_pending, run_telegram_turn
-
+async def _gates(update: Any, context: Any, text: str) -> tuple[Any, int, dict] | None:
+    """Gate bersama teks & file. Return (msg, user_id, bot_data) atau None
+    kalau pesan sudah dikonsumsi (stranger/busy/jawaban pending)."""
     msg = update.effective_message or update.message
     user = update.effective_user
     bot_data = context.bot_data
     ac: AccessControl = bot_data["ac"]
-    admin_username: str = bot_data.get("admin_username", "")
-    admin_id: int = bot_data.get("admin_id", 0)
-    text = msg.text or ""
     user_id = user.id
-
     if ac.check(user_id) == "stranger":
+        admin_username: str = bot_data.get("admin_username", "")
+        admin_id: int = bot_data.get("admin_id", 0)
         await msg.reply_text(stranger_reply(admin_username)[:TG_MAX_MESSAGE])
         if admin_id:
             with _suppress():
@@ -137,24 +136,35 @@ async def on_message(update: Any, context: Any) -> None:
                     text=stranger_admin_notice(
                         user_id, getattr(user, "username", "") or "",
                         text)[:TG_MAX_MESSAGE])
-        return
-
-    # Jawaban untuk pending confirm/ask dari turn yang jalan.
+        return None
     pending = resolve_pending(bot_data, user_id, text)
     if pending == "handled":
-        return
+        return None
     busy = bot_data.setdefault("busy", set())
     if pending == "answered-new" and user_id in busy:
         await msg.reply_text("Bukan Y/N — tool ditolak. ⏳ Tunggu turn "
                              "selesai, lalu kirim ulang perintahmu.")
-        return
-
+        return None
     if user_id in busy:
         await msg.reply_text("⏳ Masih proses, tunggu sebentar ya.")
-        return
+        return None
+    return msg, user_id, bot_data
 
-    result = route_message(user_id, getattr(user, "username", "") or "",
-                           text, ac, admin_username)
+
+async def on_message(update: Any, context: Any) -> None:
+    """Semua pesan teks → route. Stranger dibalas+notice; user/admin ke agent."""
+    from tg.agent import run_telegram_turn
+
+    text = (update.effective_message or update.message).text or ""
+    gated = await _gates(update, context, text)
+    if gated is None:
+        return
+    msg, user_id, bot_data = gated
+    ac: AccessControl = bot_data["ac"]
+    admin_username: str = bot_data.get("admin_username", "")
+    result = route_message(user_id, getattr(
+        update.effective_user, "username", "") or "", text, ac,
+        admin_username)
     if result.user_reply:
         await msg.reply_text(result.user_reply[:TG_MAX_MESSAGE])
         return
@@ -167,6 +177,7 @@ async def on_message(update: Any, context: Any) -> None:
                              "(Step 7). Sabar ya ⏳")
         return
 
+    busy = bot_data.setdefault("busy", set())
     busy.add(user_id)
     try:
         await run_telegram_turn(update, context, text)
@@ -176,6 +187,41 @@ async def on_message(update: Any, context: Any) -> None:
         item = bot_data.get("pending", {}).pop(user_id, None)
         if item is not None and not item["future"].done():
             item["future"].cancel()
+
+
+async def on_file(update: Any, context: Any) -> None:
+    """Dokumen/foto → download ke uploads/ → agent proses (Step 5)."""
+    from tg.agent import run_telegram_turn
+    from tg.file_handler import describe_for_agent, download_from_telegram
+
+    msg = update.effective_message or update.message
+    doc = getattr(msg, "document", None)
+    photos = getattr(msg, "photo", None)
+    if doc is not None:
+        label, file_id, filename = "dokumen", doc.file_id, (
+            getattr(doc, "file_name", "") or "file")
+    elif photos:
+        best = photos[-1]  # resolusi terbesar
+        label, file_id, filename = "foto", best.file_id, "foto.jpg"
+    else:
+        return
+    gated = await _gates(update, context, f"[{label} diterima]")
+    if gated is None:
+        return
+    msg, user_id, bot_data = gated
+    await msg.reply_text(f"📥 {label} diterima, download...")
+    try:
+        path = await download_from_telegram(file_id, filename, context.bot)
+    except Exception as e:
+        await msg.reply_text(f"Gagal download {label}: {e}")
+        return
+    prompt = describe_for_agent(path)
+    busy = bot_data.setdefault("busy", set())
+    busy.add(user_id)
+    try:
+        await run_telegram_turn(update, context, prompt)
+    finally:
+        busy.discard(user_id)
 
 
 class _suppress:

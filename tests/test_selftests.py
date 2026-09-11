@@ -65,8 +65,10 @@ SELF_TEST_MODULES = [
     "tg.access_control",
     "tg.formatter",
     "tg.agent",
+    "tg.file_handler",
     "tg.handlers",
     "tg.bot",
+    "tools.personal.send_telegram",
 ]
 
 
