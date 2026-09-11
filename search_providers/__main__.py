@@ -2,8 +2,6 @@
 
 from types import SimpleNamespace
 
-from pydantic import ValidationError
-
 from core.config import Config, ConfigError
 from search_providers import KNOWN_PROVIDERS, get_provider
 from search_providers.base import SearchProvider
@@ -25,13 +23,13 @@ _p = get_provider(Config(model="m", api_key="k",
                          search_provider="  Tavily ", search_api_key="x"))
 assert isinstance(_p, TavilyProvider), type(_p)
 
-# Provider asing → ditolak saat load config (ValidationError pydantic),
+# Provider asing → ditolak saat konstruksi Config (ConfigError),
 # dengan pesan field yang jelas. Factory tetap punya ConfigError sebagai
 # pertahanan lapis dua (dicapai via config duck-typed).
 try:
     Config(model="m", api_key="k", search_provider="google")
-    raise AssertionError("harus ValidationError")
-except ValidationError as e:
+    raise AssertionError("harus ConfigError")
+except ConfigError as e:
     assert "search_provider" in str(e), e
 
 try:

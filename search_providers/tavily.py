@@ -3,7 +3,7 @@
 Keunggulan: response sudah include konten penuh → tidak perlu scrape lagi.
 Set content langsung dari response, scraped=True.
 
-Butuh: pip install tavily-python + search_api_key "tvly-xxxx".
+Butuh: pip install "multacd[tavily]" + search_api_key "tvly-xxxx".
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ class TavilyProvider(SearchProvider):
             from tavily import TavilyClient
         except ImportError as e:
             raise SearchProviderError(
-                "SDK tavily-python belum install. Jalankan: pip install tavily-python"
+                "SDK tavily-python belum install. Jalankan: pip install \"multacd[tavily]\""
             ) from e
         try:
             client = TavilyClient(api_key=self._api_key)
