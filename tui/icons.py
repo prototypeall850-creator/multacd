@@ -24,8 +24,8 @@ LEVELS = ("nerdfonts", "unicode", "ascii")
 
 # glyph per level: (nerdfonts, unicode, ascii)
 _ICONS: dict[str, tuple[str, str, str]] = {
-    "app": ("⚡", "*", "[*]"),             # v2: unicode tanpa emoji 2-cell
-    "mode": ("💻", ">", "[>]"),          # (Termux font kecil aman)
+    "app": ("\uf0e7", "*", "[*]"),             # fa-bolt (nerd); tenang di semua level
+    "mode": ("\uf108", ">", "[>]"),          # fa-desktop
     "folder": ("\uf07b", "*", "[+]"),
     "file": ("\uf15b", "-", "--"),
     "python": ("\ue73c", "~", "(py)"),
@@ -42,13 +42,13 @@ _ICONS: dict[str, tuple[str, str, str]] = {
     "added": ("\uf067", "+", "[A]"),
     "deleted": ("\uf068", "-", "[D]"),
     "renamed": ("→", ">", "[R]"),
-    "conflict": ("⚠", "!", "[C]"),
+    "conflict": ("\uf071", "!", "[C]"),      # fa-warning, bukan emoji ⚠
     "expand": ("[+]", "[+]", "[+]"),
     "collapse": ("[-]", "[-]", "[-]"),
     "bullet": ("•", "*", "*"),
     "arrow": ("→", ">", ">"),
-    "export": ("⭳", "#", "[E]"),
-    "preview": ("👁", "@", "[?]"),
+    "export": ("\uf019", "#", "[E]"),        # fa-download, bukan ⭳
+    "preview": ("\uf06e", "@", "[?]"),       # fa-eye, bukan emoji 👁
 }
 
 _level: str = "unicode"

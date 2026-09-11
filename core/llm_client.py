@@ -5,9 +5,9 @@ Dipakai oleh agent loop (Step 7) lewat async generator:
     client = setup_client(config)
     async for event in client.stream_completion(messages, tools):
         if isinstance(event, StreamText):
-            ... tampilkan event.content ke TUI ...
+            ... tampilkan event.content ...
         elif isinstance(event, StreamDone):
-            ... event.text = teks penuh, event.tool_calls = [ToolCallRequest] ...
+            ... event.text = teks penuh, event.tool_calls = [...] ...
 
 Test cepat tanpa API key (logika akumulasi + error mapping):
     python -m core.llm_client
@@ -143,26 +143,26 @@ class LLMClient:
                 conn_attempts += 1
                 if conn_attempts > MAX_CONNECTION_RETRIES or yielded_any_text:
                     raise LLMError(
-                        "🌐 Gagal konek ke LLM provider "
+                        "Gagal konek ke LLM provider "
                         f"({MAX_CONNECTION_RETRIES}x percobaan). "
                         "Cek koneksi internet / api_base di config."
                     ) from e
                 await asyncio.sleep(RETRY_BASE_DELAY * conn_attempts)
             except AuthenticationError as e:
                 raise LLMError(
-                    "🔑 API key ditolak provider. Cek `api_key` di ~/.multacd/config.yaml "
+                    "API key ditolak provider. Cek `api_key` di ~/.multacd/config.yaml "
                     "(BYOK — pastikan key cocok dengan `model` yang dipilih)."
                 ) from e
             except NotFoundError as e:
                 raise LLMError(
-                    f"🔍 Model `{self.config.model}` tidak ditemukan oleh provider. "
+                    f"Model `{self.config.model}` tidak ditemukan oleh provider. "
                     "Cek penulisan `model` di config (format LiteLLM, mis. "
                     "`anthropic/claude-sonnet-4-6`, `openai/gpt-4o`)."
                 ) from e
             except LLMError:
                 raise
             except Exception as e:
-                raise LLMError(f"❌ LLM error tak terduga ({type(e).__name__}): {e}") from e
+                raise LLMError(f"LLM error tak terduga ({type(e).__name__}): {e}") from e
 
     async def complete(
         self,
@@ -241,11 +241,11 @@ class _StreamAccumulator:
                 arguments = json.loads(raw_args)
             except json.JSONDecodeError as e:
                 raise LLMError(
-                    f"❌ LLM mengirim tool_call `{name}` dengan argumen bukan JSON valid: {e}"
+                    f"LLM mengirim tool_call `{name}` dengan argumen bukan JSON valid: {e}"
                 ) from e
             if not isinstance(arguments, dict):
                 raise LLMError(
-                    f"❌ Argumen tool_call `{name}` harus object JSON, dapat: {type(arguments).__name__}"
+                    f"Argumen tool_call `{name}` harus object JSON, dapat: {type(arguments).__name__}"
                 )
             calls.append(ToolCallRequest(id=slot["id"] or f"call_{index}", name=name, arguments=arguments))
         return StreamDone(text="".join(self._text_parts), tool_calls=calls,

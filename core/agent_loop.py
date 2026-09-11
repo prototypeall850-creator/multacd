@@ -5,8 +5,8 @@ Async generator — setiap update di-yield real-time ke TUI:
 
     async for event in run_agent(user_input, context, config):
         isinstance(event, AgentText)      → tampilkan potongan teks
-        isinstance(event, AgentToolStart) → tampilkan 🔧 ... ⏳
-        isinstance(event, AgentToolDone)  → update jadi ✅ / ❌
+        isinstance(event, AgentToolStart) → tampilkan tool berjalan
+        isinstance(event, AgentToolDone)  → update jadi sukses / gagal
         isinstance(event, AgentDone)      → agent selesai
         isinstance(event, AgentError)     → tampilkan error, loop berhenti
 
@@ -102,7 +102,7 @@ async def _stdin_confirm(tool_name: str, params: dict[str, Any]) -> str:
         extra = "/e edit pesan"
     elif tool_name == "git_push":
         extra = "/b branch baru"
-    print(f"⚠️  {tool_name} {target} — izinkan? [y/n/a{extra}] ", end="", flush=True)
+    print(f"[izin] {tool_name} {target} — lanjutkan? [y/n/a{extra}] ", end="", flush=True)
     try:
         ans = await asyncio.to_thread(input)
     except (EOFError, KeyboardInterrupt):
@@ -123,7 +123,7 @@ async def _stdin_confirm(tool_name: str, params: dict[str, Any]) -> str:
 
 
 async def _stdin_ask(question: str) -> str:
-    print(f"❓ {question}")
+    print(f"? {question}")
     try:
         return await asyncio.to_thread(input, "Jawaban: ")
     except (EOFError, KeyboardInterrupt):
@@ -180,7 +180,7 @@ async def run_agent(
         iteration += 1
         if iteration > config.max_tool_iterations:
             yield AgentError(
-                f"⚠️ Mencapai batas {config.max_tool_iterations} iterasi tool. "
+                f"Mencapai batas {config.max_tool_iterations} iterasi tool. "
                 "Berhenti agar tidak infinite loop — coba pecah tugas jadi langkah kecil."
             )
             return
@@ -199,7 +199,7 @@ async def run_agent(
                 # Provider aneh: stream tutup tanpa StreamDone — jangan
                 # biarkan assert mentah, kasih pesan yang bisa dibaca user.
                 yield AgentError(
-                    "⚠️ Provider menutup stream tanpa hasil lengkap. "
+                    "Provider menutup stream tanpa hasil lengkap. "
                     "Coba ulangi; kalau berulang, cek status provider / model.")
                 return
         except LLMError as e:

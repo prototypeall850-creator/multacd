@@ -138,7 +138,7 @@ class SourcesPanel(Vertical):
                 cut = ""
                 if len(it["preview"]) >= PREVIEW_CHARS:
                     cut = "\n…(dipotong — buka URL buat utuh)"
-                return f"📄 {it['title']}\n{url}\n\n{body}{cut}"
+                return f"{it['title']}\n{url}\n\n{body}{cut}"
         return f"(sumber tidak dikenal: {url})"
 
     # ── interaksi ──

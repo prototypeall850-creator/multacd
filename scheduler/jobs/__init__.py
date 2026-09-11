@@ -27,7 +27,7 @@ def run_job(action: str, topic: str = "", channel: str = "telegram",
     handler = HANDLERS.get(action)
     if handler is None:
         msg = f"skip job {name!r}: handler {action!r} belum tersedia"
-        print(f"⚠️ {msg}")
+        print(f"warn: {msg}")
         return msg
     return handler(topic=topic, channel=channel, cron=cron, name=name)
 

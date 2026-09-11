@@ -147,7 +147,7 @@ class SchedulerEngine:
                              getattr(sched, "channel", "") or "telegram")
                 loaded.append(sched.name)
             except ValueError as e:
-                print(f"⚠️ skip schedule {getattr(sched, 'name', '?')}: {e}")
+                print(f"skip schedule {getattr(sched, 'name', '?')}: {e}")
                 skipped.append(getattr(sched, "name", "?"))
         return {"loaded": loaded, "skipped": skipped}
 

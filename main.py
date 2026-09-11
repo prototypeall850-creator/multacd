@@ -96,32 +96,32 @@ def _run_update() -> int:
     from core.updater import get_current_version
 
     if getattr(sys, "frozen", False):
-        print("⬆️ Kamu pakai binary standalone — update via installer:")
+        print("Kamu pakai binary standalone — update via installer:")
         print("   Linux/macOS/Termux: curl -fsSL https://get.multacd.dev | bash")
         print("   Windows: irm https://get.multacd.dev/install.ps1 | iex")
         return 0
     before = get_current_version()
-    print(f"⬆️ versi sekarang: {before} — mengupdate via pip...")
+    print(f"Update: versi sekarang {before} — mengupdate via pip...")
     try:
         proc = _sp.run(
             [sys.executable, "-m", "pip", "install", "--upgrade", "multacd"],
             capture_output=True, text=True, timeout=300,
         )
     except Exception as e:
-        print(f"❌ update gagal ({type(e).__name__}: {e})")
+        print(f"Update gagal ({type(e).__name__}: {e})")
         print("   Coba manual: pip install --upgrade multacd")
         return 1
     if proc.returncode != 0:
         tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
-        print("❌ update gagal:")
+        print("Update gagal:")
         for line in tail:
             print(f"   {line}")
         return 1
     after = get_current_version()
     if after != before:
-        print(f"✅ update selesai: {before} → {after}. Restart multacd.")
+        print(f"Update selesai: {before} → {after}. Restart multacd.")
     else:
-        print(f"✅ sudah versi terbaru ({after}).")
+        print(f"Sudah versi terbaru ({after}).")
     return 0
 
 
@@ -147,36 +147,36 @@ def main(argv: list[str] | None = None) -> int:
 
         saved = run_setup_wizard(resolve_config_path(args.config))
         if saved is None:
-            print("Setup dibatalkan — sampai jumpa lagi. 👋")
+            print("Setup dibatalkan.")
             return 1
         try:
             cfg = load_config(args.config)
         except SystemExit as e:
             return int(e.code or 1)
     except Exception as e:
-        print(f"❌ Gagal load config: {e}", file=sys.stderr)
+        print(f"Gagal load config: {e}", file=sys.stderr)
         return 1
 
     if args.model:
         if not args.model.strip():
-            print("❌ --model tidak boleh kosong.", file=sys.stderr)
+            print("--model tidak boleh kosong.", file=sys.stderr)
             return 1
         cfg.model = args.model.strip()
 
     if args.daemon or args.daemon_run:
         # Daemon: tanpa TUI, tanpa wizard (config wajib sudah ada).
         from daemon.process import run_daemon
-        print("👻 daemon mode: scheduler + bot, tanpa TUI. "
+        print("Daemon mode: scheduler + bot, tanpa TUI. "
               "Ctrl+C / daemon stop untuk berhenti.")
         return run_daemon(cfg)
 
     try:
         MultacdApp(cfg, version=APP_VERSION).run()
     except KeyboardInterrupt:
-        print("\n👋 Bye!")
+        print("\nBye!")
     except Exception as e:
         # Jangan muntahkan traceback mentah ke user.
-        print(f"❌ multacd berhenti karena error tak terduga ({type(e).__name__}): {e}",
+        print(f"multacd berhenti karena error tak terduga ({type(e).__name__}): {e}",
               file=sys.stderr)
         print("   Coba lagi; kalau berulang, cek config & koneksi internet.", file=sys.stderr)
         return 1

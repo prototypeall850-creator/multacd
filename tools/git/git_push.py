@@ -53,7 +53,7 @@ def git_push(workdir: str = ".", remote: str = "origin", branch: str = "",
     target = branch.strip() or (_current_branch(workdir) or "")
     if target in PROTECTED_BRANCHES and not allow_protected:
         return fail(
-            f"⛔ Branch `{target}` dilindungi. Jangan push langsung — "
+            f"Branch `{target}` dilindungi. Jangan push langsung — "
             "tanyakan user dulu: (1) tetap push ke branch ini, "
             "(2) buat branch baru lalu push, atau (3) batal. "
             "Kalau user pilih (1), ulangi tool ini dengan allow_protected=true.")

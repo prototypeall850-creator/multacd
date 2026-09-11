@@ -29,7 +29,7 @@ MODE_RESEARCH = "research"
 MODE_PERSONAL = "personal"
 
 HELP_TEXT = (
-    "📖 Command multacd:\n"
+    "Command multacd:\n"
     "  /code          → mode Coding Agent (default)\n"
     "  /research      → mode Research Agent (riset internet + sumber)\n"
     "  /personal      → Personal Agent (bot, jadwal, briefing, daemon)\n"
@@ -183,9 +183,9 @@ class ModeManager:
 
     def set_mode(self, mode: str) -> str:
         if mode not in (MODE_CODE, MODE_RESEARCH, MODE_PERSONAL):
-            return f"❓ Mode tidak dikenal: {mode}. Pilihan: /code /research /personal"
+            return f"Mode tidak dikenal: {mode}. Pilihan: /code /research /personal"
         self._mode = mode
-        return f"✅ Mode: {mode}"
+        return f"Mode: {mode}"
 
     def get_mode_prompt(self) -> str:
         return MODE_PROMPTS[self._mode]
@@ -234,33 +234,33 @@ class ModeManager:
                 snapshot = f"(status daemon gagal dibaca: {e})"
             return CommandResult(
                 True,
-                f"{msg} 🏠 — kelola bot, jadwal, briefing, daemon.\n"
+                f"{msg} — kelola bot, jadwal, briefing, daemon.\n"
                 f"{snapshot}",
                 "mode")
         if cmd == "/clear":
-            return CommandResult(True, "🧹 History dibersihkan — mulai sesi baru.", "clear")
+            return CommandResult(True, "History dibersihkan — mulai sesi baru.", "clear")
         if cmd == "/scan":
             if self._rescan_fn is None:
-                return CommandResult(True, "🔍 Scan ulang belum wiring (jalan di TUI).", "scan")
+                return CommandResult(True, "Scan ulang belum wiring (jalan di TUI).", "scan")
             try:
                 return CommandResult(True, self._rescan_fn(), "scan")
             except Exception as e:
-                return CommandResult(True, f"❌ Scan gagal ({type(e).__name__}): {e}", None)
+                return CommandResult(True, f"Scan gagal ({type(e).__name__}): {e}", None)
         if cmd == "/model":
             if not arg:
                 current = self._config.model if self._config else "?"
-                return CommandResult(True, f"🤖 Model aktif: {current}", None)
+                return CommandResult(True, f"Model aktif: {current}", None)
             if self._config is None:
-                return CommandResult(True, "❌ Config tidak tersedia — model tidak bisa diganti.", None)
+                return CommandResult(True, "Config tidak tersedia — model tidak bisa diganti.", None)
             if not arg.strip():
-                return CommandResult(True, "❌ Nama model tidak boleh kosong.", None)
+                return CommandResult(True, "Nama model tidak boleh kosong.", None)
             self._config.model = arg.strip()
-            return CommandResult(True, f"✅ Model diganti ke: {self._config.model}", "model")
+            return CommandResult(True, f"Model diganti ke: {self._config.model}", "model")
         if cmd == "/help":
             return CommandResult(True, HELP_TEXT, None)
         if cmd == "/soul":
             return CommandResult(True, self._soul or "(soul kosong)", None)
-        return CommandResult(True, f"❓ Command tidak dikenal: {parts[0]}. Ketik /help.", None)
+        return CommandResult(True, f"Command tidak dikenal: {parts[0]}. Ketik /help.", None)
 
 
 if __name__ == "__main__":
@@ -286,7 +286,7 @@ if __name__ == "__main__":
     assert r.is_command is False, r
 
     # 3. /code (case-insensitive) + /help + /soul
-    assert mm.handle_command("/CODE").message == "✅ Mode: code"
+    assert mm.handle_command("/CODE").message == "Mode: code"
     assert "/scan" in mm.handle_command("/help").message
     assert mm.handle_command("/soul").message == "soul-test"
 

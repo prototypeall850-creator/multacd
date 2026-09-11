@@ -227,7 +227,7 @@ class SetupWizard(Screen):
             self._hint("Enter lanjut · Esc kembali · Ctrl+C batal")
         elif self.step == 1:
             await body.mount(Static("Setup (1/6) — LLM Provider"))
-            items = [ListItem(Label(f"{'★ ' if p.id == self.provider.id else ''}"
+            items = [ListItem(Label(f"{'> ' if p.id == self.provider.id else ''}"
                                     f"{p.label}")) for p in PROVIDERS]
             lv = ListView(*items, id="wiz-list")
             await body.mount(lv)
@@ -386,7 +386,7 @@ class SetupWizard(Screen):
                 self._hint(f"live gagal ({self.fetch_error}) — list kurasi. "
                            "Esc kembali")
             elif self.models:
-                self._hint("live ✓ · Ketik manual lalu Enter · klik list · "
+                self._hint("sinkron live · Ketik manual lalu Enter · klik list · "
                            "Esc kembali")
 
     def _back_args(self) -> dict[str, bool]:

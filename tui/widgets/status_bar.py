@@ -9,7 +9,7 @@ from tui import icons
 
 
 class StatusBar(Static):
-    """Contoh: ⚡ multacd  ·  💻 coding  ·  groq/llama-3.3  ·  ● idle
+    """Contoh: multacd  ·  code  ·  groq/llama-3.3  ·  idle
     (glyph via tui.icons — ikut level nerdfonts/unicode/ascii)."""
 
     def __init__(self) -> None:

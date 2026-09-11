@@ -198,7 +198,7 @@ class MainScreen(Screen):
         except Exception:
             return
         await chat.add_info(
-            f"⬆️ Update tersedia: multacd v{res['latest_version']} "
+            f"Update tersedia: multacd v{res['latest_version']} "
             f"(kamu: v{res['current_version']}) — jalankan: multacd update"
         )
 

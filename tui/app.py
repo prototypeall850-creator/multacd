@@ -81,7 +81,7 @@ class MultacdApp(App[None]):
             self.project_ctx = f"(scan gagal: {type(e).__name__}: {e})"
             self.project_label = "?"
         self.composer.update_project_ctx(self.project_ctx)
-        return f"🔍 {self.project_label} — context diperbarui."
+        return f"{self.project_label} — context diperbarui."
 
     def on_mount(self) -> None:
         screen = MainScreen()

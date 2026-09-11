@@ -235,7 +235,7 @@ def resolve_config_path(explicit: Path | str | None = None) -> Path:
 
 def _setup_message(path: Path) -> str:
     return (
-        "⚡ multacd — config belum ditemukan.\n"
+        "multacd — config belum ditemukan.\n"
         "\n"
         f"File yang dicari: {path}\n"
         "\n"
@@ -259,7 +259,7 @@ def load_config(explicit_path: Path | str | None = None) -> Config:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        print(f"❌ Gagal membuat folder config {path.parent}: {e}", file=sys.stderr)
+        print(f"Gagal membuat folder config {path.parent}: {e}", file=sys.stderr)
         raise SystemExit(1) from e
 
     if not path.is_file():
@@ -269,15 +269,15 @@ def load_config(explicit_path: Path | str | None = None) -> Config:
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as e:
-        print(f"❌ config.yaml bukan YAML valid: {path}\n   Detail: {e}", file=sys.stderr)
+        print(f"config.yaml bukan YAML valid: {path}\n   Detail: {e}", file=sys.stderr)
         raise SystemExit(1) from e
     except OSError as e:
-        print(f"❌ Gagal membaca config {path}: {e}", file=sys.stderr)
+        print(f"Gagal membaca config {path}: {e}", file=sys.stderr)
         raise SystemExit(1) from e
 
     if not isinstance(raw, dict) or not raw:
         print(
-            f"❌ config.yaml kosong atau tidak berbentuk key: value: {path}\n"
+            f"config.yaml kosong atau tidak berbentuk key: value: {path}\n"
             "   Isi dengan contoh config (jalankan tanpa config untuk melihatnya).",
             file=sys.stderr,
         )
@@ -286,7 +286,7 @@ def load_config(explicit_path: Path | str | None = None) -> Config:
     try:
         cfg = Config(**raw)
     except ValidationError as e:
-        print(f"❌ config.yaml tidak valid: {path}", file=sys.stderr)
+        print(f"config.yaml tidak valid: {path}", file=sys.stderr)
         for err in e.errors():
             field = ".".join(str(p) for p in err["loc"])
             print(f"   • {field}: {err['msg']}", file=sys.stderr)
@@ -294,10 +294,10 @@ def load_config(explicit_path: Path | str | None = None) -> Config:
         raise SystemExit(1) from e
 
     if not cfg.model.strip():
-        print("❌ Field `model` wajib diisi (contoh: anthropic/claude-sonnet-4-6).", file=sys.stderr)
+        print("Field `model` wajib diisi (contoh: anthropic/claude-sonnet-4-6).", file=sys.stderr)
         raise SystemExit(1)
     if not cfg.api_key.strip():
-        print("❌ Field `api_key` wajib diisi (BYOK — pakai key provider kamu).", file=sys.stderr)
+        print("Field `api_key` wajib diisi (BYOK — pakai key provider kamu).", file=sys.stderr)
         raise SystemExit(1)
 
     return cfg

@@ -107,13 +107,13 @@ async def _serve(config: Any) -> None:
     from core.plugin_loader import load_all as _load_plugins
     _plug = _load_plugins()
     if _plug.plugins:
-        print(f"🔌 plugin: {', '.join(p.name for p in _plug.plugins)}",
+        print(f"plugin aktif: {', '.join(p.name for p in _plug.plugins)}",
               flush=True)
     for w in _plug.warnings:
-        print(f"⚠️ plugin: {w}", flush=True)
+        print(f"plugin warning: {w}", flush=True)
     engine = get_engine()
     loaded = engine.load_from_config(config)
-    print(f"⏰ scheduler: {len(loaded['loaded'])} dari config, "
+    print(f"scheduler: {len(loaded['loaded'])} dari config, "
           f"{len(engine.list_jobs())} total di tabel.", flush=True)
 
     bot = None
@@ -124,10 +124,10 @@ async def _serve(config: Any) -> None:
         except ValueError as e:
             # Token ngawur (bukan kosong) → jangan crash daemon,
             # scheduler tetap jalan, admin baca log.
-            print(f"⚠️ bot tidak jalan ({e}) — mode scheduler-only.",
+            print(f"bot tidak jalan ({e}) — mode scheduler-only.",
                   flush=True)
     else:
-        print("⚠️ tanpa bot_token — mode scheduler-only.", flush=True)
+        print("tanpa bot_token — mode scheduler-only.", flush=True)
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -149,9 +149,9 @@ async def _serve(config: Any) -> None:
         await bot.app.initialize()
         await bot.app.start()
         await bot.app.updater.start_polling()
-        print("🤖 bot polling jalan.", flush=True)
+        print("bot polling jalan.", flush=True)
     await stop.wait()
-    print("🛑 shutdown...", flush=True)
+    print("shutdown...", flush=True)
     ipc_task.cancel()
     if bot is not None:
         with suppress(Exception):

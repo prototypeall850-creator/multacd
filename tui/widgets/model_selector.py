@@ -204,7 +204,7 @@ class ModelSelector(Vertical):
             rest = [m for m in models
                     if m[1] not in self._favorites and m[1] not in self._recent]
             if fav:
-                rows.append(("head", "★ Favorites"))
+                rows.append(("head", "Favorites"))
                 rows += [("item", p, n, t) for p, n, t in fav]
             if rec:
                 rows.append(("head", "Recent"))
