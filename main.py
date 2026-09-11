@@ -35,7 +35,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="Jalan sebagai daemon foreground (bot + scheduler, tanpa TUI)")
     p.add_argument("--daemon-run", action="store_true",
                    help=argparse.SUPPRESS)  # internal: target child daemon_start
-    sub = p.add_subparsers(dest="daemon_cmd", metavar="daemon {start,stop,status,logs}")
+    sub = p.add_subparsers(dest="cmd", metavar="{daemon,update}")
     d = sub.add_parser("daemon", help="Kelola daemon background")
     d.add_argument("action", choices=["start", "stop", "status", "logs"],
                    help="start = jalan background · logs = lihat log")
@@ -43,6 +43,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="baris log ditampilkan (default 50)")
     d.add_argument("-f", "--follow", action="store_true",
                    help="tail -f log (Ctrl+C berhenti)")
+    sub.add_parser("update", help="Update multacd ke versi terbaru (via pip)")
     return p.parse_args(argv)
 
 
@@ -88,13 +89,51 @@ def _run_daemon_cmd(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_update() -> int:
+    """`multacd update`: pip install --upgrade. Binary → instruksi installer."""
+    import subprocess as _sp
+
+    from core.updater import get_current_version
+
+    if getattr(sys, "frozen", False):
+        print("⬆️ Kamu pakai binary standalone — update via installer:")
+        print("   Linux/macOS/Termux: curl -fsSL https://get.multacd.dev | bash")
+        print("   Windows: irm https://get.multacd.dev/install.ps1 | iex")
+        return 0
+    before = get_current_version()
+    print(f"⬆️ versi sekarang: {before} — mengupdate via pip...")
+    try:
+        proc = _sp.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "multacd"],
+            capture_output=True, text=True, timeout=300,
+        )
+    except Exception as e:
+        print(f"❌ update gagal ({type(e).__name__}: {e})")
+        print("   Coba manual: pip install --upgrade multacd")
+        return 1
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-3:]
+        print("❌ update gagal:")
+        for line in tail:
+            print(f"   {line}")
+        return 1
+    after = get_current_version()
+    if after != before:
+        print(f"✅ update selesai: {before} → {after}. Restart multacd.")
+    else:
+        print(f"✅ sudah versi terbaru ({after}).")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args.version:
         print(f"multacd {APP_VERSION}")
         return 0
-    if args.daemon_cmd == "daemon":
+    if args.cmd == "daemon":
         return _run_daemon_cmd(args)
+    if args.cmd == "update":
+        return _run_update()
 
     try:
         cfg = load_config(args.config)

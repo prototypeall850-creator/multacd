@@ -136,6 +136,7 @@ class MainScreen(Screen):
         self.query_one(InputBar).focus()
         self.run_worker(self._show_welcome())
         self.run_worker(self._git_watcher())
+        self.run_worker(self._maybe_update_notice())
 
     async def _git_watcher(self) -> None:
         """Refresh segmen git status bar tiap 10 dtk (background, tanpa ganggu chat)."""
@@ -151,6 +152,24 @@ class MainScreen(Screen):
                 continue
             self.app.git_summary = summary
             bar.set_git(summary)
+
+    async def _maybe_update_notice(self) -> None:
+        """Cek update di background; tampil sekali di chat kalau ada versi baru."""
+        try:
+            from core import updater
+            res = await asyncio.to_thread(updater.check)
+        except Exception:
+            return  # silent — update check tidak boleh ganggu sesi
+        if not res.get("update_available"):
+            return
+        try:
+            chat = self.query_one(ChatPanel)
+        except Exception:
+            return
+        await chat.add_info(
+            f"⬆️ Update tersedia: multacd v{res['latest_version']} "
+            f"(kamu: v{res['current_version']}) — jalankan: multacd update"
+        )
 
     async def _show_welcome(self) -> None:
         chat = self.query_one(ChatPanel)
