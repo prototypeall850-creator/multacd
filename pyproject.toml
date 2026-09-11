@@ -71,6 +71,21 @@ packages = [
     "tui",
 ]
 
+# Sdist: jangan bawa venv/build/output (PyPI tolak file >100MB).
+[tool.hatch.build.targets.sdist]
+exclude = [
+    ".venv",
+    ".git",
+    "dist",
+    "build",
+    "site",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+]
+
 [tool.hatch.build.targets.wheel.force-include]
 "main.py" = "main.py"
 "soul.md" = "soul.md"
