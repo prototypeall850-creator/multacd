@@ -1,4 +1,7 @@
-"""LLM client — wrapper LiteLLM: streaming + tool call + retry.
+"""LLM client — wrapper provider native: streaming + tool call + retry.
+
+Backend: core/providers (OpenAI-compatible + Anthropic via httpx).
+Tanpa LiteLLM — ringan buat Termux (tanpa kompilasi Rust).
 
 Dipakai oleh agent loop (Step 7) lewat async generator:
 
@@ -9,7 +12,7 @@ Dipakai oleh agent loop (Step 7) lewat async generator:
         elif isinstance(event, StreamDone):
             ... event.text = teks penuh, event.tool_calls = [...] ...
 
-Test cepat tanpa API key (logika akumulasi + error mapping):
+Test cepat tanpa API key (mock httpx, tanpa network):
     python -m core.llm_client
 Test live (butuh ~/.multacd/config.yaml yang valid):
     python -m core.llm_client --live "hello"
@@ -19,20 +22,19 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
-import litellm
-from litellm import (
-    APIConnectionError,
-    AuthenticationError,
-    NotFoundError,
-    RateLimitError,
-)
-
 from core.config import Config, load_config
+from core.providers import (
+    ProviderAuthError,
+    ProviderConnectionError,
+    ProviderError,
+    ProviderNotFoundError,
+    ProviderRateLimitError,
+    resolve_provider,
+)
 
 MAX_CONNECTION_RETRIES = 3
 MAX_RATE_LIMIT_RETRIES = 3
@@ -87,18 +89,6 @@ class LLMClient:
     def __init__(self, config: Config) -> None:
         self.config = config
 
-    def _base_kwargs(self) -> dict[str, Any]:
-        kwargs: dict[str, Any] = {
-            "model": self.config.model,
-            "api_key": self.config.api_key,
-            "max_tokens": self.config.max_tokens,
-            "temperature": self.config.temperature,
-            "timeout": REQUEST_TIMEOUT,
-        }
-        if self.config.api_base:
-            kwargs["api_base"] = self.config.api_base
-        return kwargs
-
     async def stream_completion(
         self,
         messages: list[dict[str, Any]],
@@ -106,41 +96,43 @@ class LLMClient:
     ) -> AsyncIterator[StreamEvent]:
         """Kirim messages ke LLM, yield StreamText lalu diakhiri satu StreamDone.
 
+        Routing provider by config.model (lihat resolve_provider).
         Retry hanya dilakukan jika stream BELUM menghasilkan teks apapun
         (aman — tidak ada duplikasi output). Gagal di tengah stream
         langsung raise LLMError.
         """
-        kwargs = self._base_kwargs()
-        if tools:
-            kwargs["tools"] = tools
-        # Minta usage di stream (OpenAI dkk kirim di chunk terakhir).
-        # LiteLLM teruskan ke provider yang support; yang lain abaikan.
-        kwargs["stream_options"] = {"include_usage": True}
+        try:
+            spec = resolve_provider(self.config.model, self.config.api_base)
+        except ProviderError as e:
+            raise LLMError(str(e)) from e
+        if spec.kind == "anthropic":
+            from core.providers.anthropic import stream_chat
+        else:
+            from core.providers.openai_compat import stream_chat
 
         conn_attempts = 0
         rate_attempts = 0
         while True:
-            accumulator = _StreamAccumulator()
             yielded_any_text = False
             try:
-                stream = await litellm.acompletion(stream=True, messages=messages, **kwargs)
-                async for chunk in stream:
-                    for event in accumulator.feed(chunk):
-                        if isinstance(event, StreamText) and event.content:
-                            yielded_any_text = True
-                        yield event
-                yield accumulator.done()
+                async for event in stream_chat(
+                        spec, self.config.api_key, messages, tools,
+                        self.config.max_tokens, self.config.temperature,
+                        REQUEST_TIMEOUT):
+                    if isinstance(event, StreamText) and event.content:
+                        yielded_any_text = True
+                    yield event
                 return
-            except RateLimitError as e:
+            except ProviderRateLimitError as e:
                 rate_attempts += 1
                 if rate_attempts > MAX_RATE_LIMIT_RETRIES or yielded_any_text:
                     raise LLMError(
-                        "⏳ Rate limit dari provider (429) — "
+                        "Rate limit dari provider (429) — "
                         f"sudah retry {MAX_RATE_LIMIT_RETRIES}x, masih dibatasi. "
                         "Tunggu sebentar lalu coba lagi."
                     ) from e
                 await asyncio.sleep(RETRY_BASE_DELAY * (2 ** (rate_attempts - 1)))
-            except APIConnectionError as e:
+            except ProviderConnectionError as e:
                 conn_attempts += 1
                 if conn_attempts > MAX_CONNECTION_RETRIES or yielded_any_text:
                     raise LLMError(
@@ -149,19 +141,21 @@ class LLMClient:
                         "Cek koneksi internet / api_base di config."
                     ) from e
                 await asyncio.sleep(RETRY_BASE_DELAY * conn_attempts)
-            except AuthenticationError as e:
+            except ProviderAuthError as e:
                 raise LLMError(
                     "API key ditolak provider. Cek `api_key` di ~/.multacd/config.yaml "
                     "(BYOK — pastikan key cocok dengan `model` yang dipilih)."
                 ) from e
-            except NotFoundError as e:
+            except ProviderNotFoundError as e:
                 raise LLMError(
                     f"Model `{self.config.model}` tidak ditemukan oleh provider. "
-                    "Cek penulisan `model` di config (format LiteLLM, mis. "
+                    "Cek penulisan `model` di config (cth: "
                     "`anthropic/claude-sonnet-4-6`, `openai/gpt-4o`)."
                 ) from e
             except LLMError:
                 raise
+            except ProviderError as e:
+                raise LLMError(f"LLM error ({type(e).__name__}): {e}") from e
             except Exception as e:
                 raise LLMError(f"LLM error tak terduga ({type(e).__name__}): {e}") from e
 
@@ -179,149 +173,116 @@ class LLMClient:
         return full
 
 
-def _get(obj: Any, key: str, default: Any = None) -> Any:
-    """Ambil atribut ATAU key dict — chunk LiteLLM bisa berbentuk keduanya."""
-    if obj is None:
-        return default
-    if isinstance(obj, dict):
-        return obj.get(key, default)
-    return getattr(obj, key, default)
+# ── Self-test tanpa network (mock httpx stream) ────────────────────────────
+
+class _FakeSSE:
+    """Resp SSE palsu: aiter_lines + aread + status_code."""
+
+    def __init__(self, lines: list[str], status: int = 200,
+                 body: bytes = b"") -> None:
+        self._lines = lines
+        self.status_code = status
+        self._body = body
+
+    async def aiter_lines(self):  # type: ignore[no-untyped-def]
+        for ln in self._lines:
+            yield ln
+
+    async def aread(self) -> bytes:
+        return self._body
 
 
-class _StreamAccumulator:
-    """Rakit fragment streaming LiteLLM jadi teks + tool call utuh."""
+class _FakeCtx:
+    def __init__(self, resp: _FakeSSE) -> None:
+        self._resp = resp
 
-    def __init__(self) -> None:
-        self._text_parts: list[str] = []
-        self._calls: dict[int, dict[str, Any]] = {}
-        self._prompt_tokens = 0
-        self._completion_tokens = 0
+    async def __aenter__(self) -> _FakeSSE:
+        return self._resp
 
-    def feed(self, chunk: Any) -> list[StreamText]:
-        events: list[StreamText] = []
-        # Usage resmi: sebagian provider selipkan di chunk terakhir
-        # (OpenAI butuh stream_options include_usage — dipasang caller).
-        usage = _get(chunk, "usage", None)
-        if usage is not None:
-            self._prompt_tokens = _get(usage, "prompt_tokens", 0) or 0
-            self._completion_tokens = _get(usage, "completion_tokens", 0) or 0
-        choices = _get(chunk, "choices", []) or []
-        if not choices:
-            return events
-        delta = _get(choices[0], "delta", {}) or {}
-
-        content = _get(delta, "content")
-        if content:
-            self._text_parts.append(content)
-            events.append(StreamText(content))
-
-        for tc in _get(delta, "tool_calls", None) or []:
-            index = _get(tc, "index", 0) or 0
-            slot = self._calls.setdefault(index, {"id": "", "name": "", "args": ""})
-            tc_id = _get(tc, "id")
-            if tc_id:
-                slot["id"] = tc_id
-            func = _get(tc, "function", {}) or {}
-            name = _get(func, "name")
-            if name:
-                slot["name"] = name
-            args = _get(func, "arguments")
-            if args:
-                slot["args"] += args
-        return events
-
-    def done(self) -> StreamDone:
-        calls: list[ToolCallRequest] = []
-        for index in sorted(self._calls):
-            slot = self._calls[index]
-            name = slot["name"]
-            if not name:
-                continue  # fragment tanpa nama — abaikan
-            raw_args = slot["args"] or "{}"
-            try:
-                arguments = json.loads(raw_args)
-            except json.JSONDecodeError as e:
-                raise LLMError(
-                    f"LLM mengirim tool_call `{name}` dengan argumen bukan JSON valid: {e}"
-                ) from e
-            if not isinstance(arguments, dict):
-                raise LLMError(
-                    f"Argumen tool_call `{name}` harus object JSON, dapat: {type(arguments).__name__}"
-                )
-            calls.append(ToolCallRequest(id=slot["id"] or f"call_{index}", name=name, arguments=arguments))
-        return StreamDone(text="".join(self._text_parts), tool_calls=calls,
-                          prompt_tokens=self._prompt_tokens,
-                          completion_tokens=self._completion_tokens)
+    async def __aexit__(self, *a: Any) -> None:
+        return None
 
 
-# ── Self-test (tanpa API key) ──────────────────────────────────────────────
+class _FakeClient:
+    """Pengganti httpx.AsyncClient buat test (tanpa network)."""
 
-def _fake_chunk(text: str = "", tool_deltas: list[dict] | None = None) -> dict:
-    return {
-        "choices": [
-            {"delta": {"content": text, "tool_calls": tool_deltas or []}},
-        ]
-    }
+    def __init__(self, resp: _FakeSSE) -> None:
+        self._resp = resp
+        self.seen: dict[str, Any] = {}
+
+    def stream(self, method: str, url: str, **kw: Any) -> _FakeCtx:
+        self.seen = {"method": method, "url": url, **kw}
+        return _FakeCtx(self._resp)
+
+    async def aclose(self) -> None:
+        pass
+
+
+def _sse_text(*chunks: str, usage: dict[str, int] | None = None) -> list[str]:
+    import json as _json
+    lines = [f"data: {_json.dumps({'choices': [{'delta': {'content': c}}]})}"
+             for c in chunks]
+    if usage is not None:
+        lines.append(f"data: {_json.dumps({'usage': usage})}")
+    lines.append("data: [DONE]")
+    return lines
 
 
 async def _self_test() -> None:
-    # 1. Teks murni
-    acc = _StreamAccumulator()
-    events: list[StreamEvent] = []
-    for ch in [_fake_chunk("Halo, "), _fake_chunk("dunia!")]:
-        events += acc.feed(ch)
-    done = acc.done()
-    assert [e.content for e in events] == ["Halo, ", "dunia!"], events
-    assert done.text == "Halo, dunia!" and done.tool_calls == []
+    from unittest.mock import patch as _patch
 
-    # 2. Tool call terpecah jadi fragment (kasus nyata streaming)
-    acc = _StreamAccumulator()
-    acc.feed(_fake_chunk("bentar, ", [{"index": 0, "id": "call_1",
-            "function": {"name": "read_file", "arguments": '{"path": "ma'}}]))
-    acc.feed(_fake_chunk("", [{"index": 0, "function": {"arguments": 'in.py"}'}}]))
-    acc.feed(_fake_chunk("", [{"index": 1, "id": "call_2",
-            "function": {"name": "bash", "arguments": '{"command": "ls"}'}}]))
-    done = acc.done()
-    assert done.text == "bentar, ", done.text
-    assert len(done.tool_calls) == 2, done.tool_calls
-    assert done.tool_calls[0].name == "read_file"
-    assert done.tool_calls[0].arguments == {"path": "main.py"}, done.tool_calls[0].arguments
-    assert done.tool_calls[1].name == "bash"
+    import httpx as _httpx
 
-    # 3. Usage resmi provider menempel di StreamDone
-    acc = _StreamAccumulator()
-    acc.feed(_fake_chunk("hi"))
-    acc.feed({"choices": [{"delta": {}}],
-              "usage": {"prompt_tokens": 120, "completion_tokens": 30}})
-    done = acc.done()
-    assert (done.prompt_tokens, done.completion_tokens) == (120, 30), done
-    acc = _StreamAccumulator()  # tanpa usage → 0 (fallback estimasi di TUI)
-    acc.feed(_fake_chunk("hi"))
-    assert acc.done().prompt_tokens == 0
+    # ANTI-TRAP: file ini jalan sebagai __main__ saat `python -m`, sementara
+    # adapter import `core.llm_client` terpisah (objek class ganda!).
+    # Semua isinstance di test ini WAJIB pakai salinan kanonis itu.
+    import core.llm_client as _canon
 
-    # 4. Argumen bukan JSON → LLMError (bukan crash)
-    acc = _StreamAccumulator()
-    acc.feed(_fake_chunk("", [{"index": 0, "function": {"name": "x", "arguments": "{oops"}}]))
-    try:
-        acc.done()
-    except LLMError:
-        pass
-    else:
-        raise AssertionError("argumen invalid harus raise LLMError")
-
-    # 5. Error mapping: auth, not-found, retry koneksi 3x
-    from unittest.mock import patch
-
-    cfg = Config(model="openai/gpt-4o", api_key="sk-bad")
+    cfg = Config(model="openai/gpt-4o", api_key="sk-x")
     client = LLMClient(cfg)
 
     async def _drain(c: LLMClient) -> StreamDone:
         async for ev in c.stream_completion([{"role": "user", "content": "hi"}]):
-            if isinstance(ev, StreamDone):
+            if isinstance(ev, _canon.StreamDone):
                 return ev
         raise AssertionError("unreachable")
 
-    with patch("core.llm_client.litellm.acompletion", side_effect=AuthenticationError("bad", "x", "x")):
+    def _client_for(resp: _FakeSSE) -> Any:
+        fake = _FakeClient(resp)
+        return _patch("httpx.AsyncClient", return_value=fake), fake
+
+    # 1. Teks streaming utuh + usage menempel
+    lines = _sse_text("Halo, ", "dunia!",
+                      usage={"prompt_tokens": 120, "completion_tokens": 30})
+    p, fake = _client_for(_FakeSSE(lines))
+    with p:
+        done = await _drain(client)
+    assert done.text == "Halo, dunia!" and done.tool_calls == [], done
+    assert (done.prompt_tokens, done.completion_tokens) == (120, 30), done
+    assert done.cost_usd > 0  # gpt-4o ada harga
+    assert fake.seen["url"] == "https://api.openai.com/v1/chat/completions"
+    assert fake.seen["json"]["model"] == "gpt-4o"
+
+    # 2. Tool call terpecah + tanpa usage → 0
+    import json as _json
+    _half = _json.dumps({"command": "ls"})
+    _frag1 = {"choices": [{"delta": {"tool_calls": [
+        {"index": 0, "id": "c1",
+         "function": {"name": "bash", "arguments": _half[:14]}}]}}]}
+    _frag2 = {"choices": [{"delta": {"tool_calls": [
+        {"index": 0, "function": {"arguments": _half[14:]}}]}}]}
+    lines = [f"data: {_json.dumps(_frag1)}",
+             f"data: {_json.dumps(_frag2)}", "data: [DONE]"]
+    p, _ = _client_for(_FakeSSE(lines))
+    with p:
+        done = await _drain(client)
+    assert len(done.tool_calls) == 1, done.tool_calls
+    assert done.tool_calls[0].arguments == {"command": "ls"}, done.tool_calls[0]
+    assert done.prompt_tokens == 0 and done.cost_usd == 0.0
+
+    # 3. Auth error → LLMError (pesan sama kayak dulu)
+    p, _ = _client_for(_FakeSSE([], status=401, body=b"bad key"))
+    with p:
         try:
             await _drain(client)
         except LLMError as e:
@@ -329,7 +290,9 @@ async def _self_test() -> None:
         else:
             raise AssertionError("auth error harus jadi LLMError")
 
-    with patch("core.llm_client.litellm.acompletion", side_effect=NotFoundError("nf", "x", "x")):
+    # 4. Not-found → LLMError
+    p, _ = _client_for(_FakeSSE([], status=404, body=b"nope"))
+    with p:
         try:
             await _drain(client)
         except LLMError as e:
@@ -337,14 +300,16 @@ async def _self_test() -> None:
         else:
             raise AssertionError("not-found harus jadi LLMError")
 
+    # 5. Koneksi putus 3x → retry lalu LLMError
     calls = {"n": 0}
 
-    async def _flaky(*a: Any, **k: Any) -> Any:
+    def _flaky(self: Any, *a: Any, **k: Any) -> Any:
         calls["n"] += 1
-        raise APIConnectionError("down", "x", "x")
+        raise _httpx.ConnectError("down")
 
-    with (patch("core.llm_client.litellm.acompletion", side_effect=_flaky),
-          patch("core.llm_client.asyncio.sleep", return_value=None)):
+    p, _ = _client_for(_FakeSSE([]))
+    with p, _patch.object(_FakeClient, "stream", _flaky), _patch(
+            "core.llm_client.asyncio.sleep", return_value=None):
         try:
             await _drain(client)
         except LLMError as e:
@@ -353,7 +318,31 @@ async def _self_test() -> None:
             raise AssertionError("conn error harus jadi LLMError")
     assert calls["n"] == MAX_CONNECTION_RETRIES + 1, calls
 
-    print("✅ llm_client self-test OK (akumulasi + error mapping + retry)")
+    # 6. Routing anthropic → endpoint messages + x-api-key
+    cfg_a = Config(model="anthropic/claude-haiku-4-5", api_key="sk-ant")
+    client_a = LLMClient(cfg_a)
+    lines = ["event: content_block_delta",
+             'data: {"delta": {"type": "text_delta", "text": "hai"}}',
+             "event: message_stop", "data: {}"]
+    p, fake = _client_for(_FakeSSE(lines))
+    with p:
+        async for ev in client_a.stream_completion(
+                [{"role": "user", "content": "hi"}]):
+            if isinstance(ev, _canon.StreamDone):
+                assert ev.text == "hai", ev
+    assert fake.seen["url"] == "https://api.anthropic.com/v1/messages"
+    assert fake.seen["headers"]["x-api-key"] == "sk-ant"
+
+    # 7. Model ngawur → LLMError jelas (tanpa network)
+    cfg_bad = Config(model="ngawur/xyz", api_key="k")
+    try:
+        await _drain(LLMClient(cfg_bad))
+    except LLMError as e:
+        assert "tidak dikenali" in str(e), e
+    else:
+        raise AssertionError("model ngawur harus ditolak")
+
+    print("✅ llm_client self-test OK (native adapter + retry)")
 
 
 async def _live_test(prompt: str) -> None:

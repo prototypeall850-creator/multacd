@@ -39,10 +39,9 @@ def test_console_script_version():
 
     from core.version import get_version
 
-    exe = shutil.which("multacd")
-    if exe is None:  # fallback: script di venv yang sama
-        candidate = Path(sys.executable).parent / "multacd"
-        exe = str(candidate) if candidate.is_file() else None
+    # Prioritas: binary di venv yang sama (anti-basi ~/.local/bin).
+    candidate = Path(sys.executable).parent / "multacd"
+    exe = str(candidate) if candidate.is_file() else shutil.which("multacd")
     if exe is None:
         pytest.skip("console script belum terinstall (pip install -e . dulu)")
     proc = _sp.run([exe, "--version"], capture_output=True, text=True,
