@@ -62,10 +62,16 @@ class StreamText:
 
 @dataclass
 class StreamDone:
-    """Stream selesai: teks penuh + daftar tool call (bisa kosong)."""
+    """Stream selesai: teks penuh + daftar tool call (bisa kosong).
+
+    Token diisi dari chunk `usage` provider (resmi, bukan estimasi).
+    0 = provider tidak melapor (streamingบาง provider tak kirim usage).
+    """
 
     text: str
     tool_calls: list[ToolCallRequest] = field(default_factory=list)
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
 
 StreamEvent = StreamText | StreamDone
@@ -106,6 +112,9 @@ class LLMClient:
         kwargs = self._base_kwargs()
         if tools:
             kwargs["tools"] = tools
+        # Minta usage di stream (OpenAI dkk kirim di chunk terakhir).
+        # LiteLLM teruskan ke provider yang support; yang lain abaikan.
+        kwargs["stream_options"] = {"include_usage": True}
 
         conn_attempts = 0
         rate_attempts = 0
@@ -184,9 +193,17 @@ class _StreamAccumulator:
     def __init__(self) -> None:
         self._text_parts: list[str] = []
         self._calls: dict[int, dict[str, Any]] = {}
+        self._prompt_tokens = 0
+        self._completion_tokens = 0
 
     def feed(self, chunk: Any) -> list[StreamText]:
         events: list[StreamText] = []
+        # Usage resmi: sebagian provider selipkan di chunk terakhir
+        # (OpenAI butuh stream_options include_usage — dipasang caller).
+        usage = _get(chunk, "usage", None)
+        if usage is not None:
+            self._prompt_tokens = _get(usage, "prompt_tokens", 0) or 0
+            self._completion_tokens = _get(usage, "completion_tokens", 0) or 0
         choices = _get(chunk, "choices", []) or []
         if not choices:
             return events
@@ -231,7 +248,9 @@ class _StreamAccumulator:
                     f"❌ Argumen tool_call `{name}` harus object JSON, dapat: {type(arguments).__name__}"
                 )
             calls.append(ToolCallRequest(id=slot["id"] or f"call_{index}", name=name, arguments=arguments))
-        return StreamDone(text="".join(self._text_parts), tool_calls=calls)
+        return StreamDone(text="".join(self._text_parts), tool_calls=calls,
+                          prompt_tokens=self._prompt_tokens,
+                          completion_tokens=self._completion_tokens)
 
 
 # ── Self-test (tanpa API key) ──────────────────────────────────────────────
@@ -268,7 +287,18 @@ async def _self_test() -> None:
     assert done.tool_calls[0].arguments == {"path": "main.py"}, done.tool_calls[0].arguments
     assert done.tool_calls[1].name == "bash"
 
-    # 3. Argumen bukan JSON → LLMError (bukan crash)
+    # 3. Usage resmi provider menempel di StreamDone
+    acc = _StreamAccumulator()
+    acc.feed(_fake_chunk("hi"))
+    acc.feed({"choices": [{"delta": {}}],
+              "usage": {"prompt_tokens": 120, "completion_tokens": 30}})
+    done = acc.done()
+    assert (done.prompt_tokens, done.completion_tokens) == (120, 30), done
+    acc = _StreamAccumulator()  # tanpa usage → 0 (fallback estimasi di TUI)
+    acc.feed(_fake_chunk("hi"))
+    assert acc.done().prompt_tokens == 0
+
+    # 4. Argumen bukan JSON → LLMError (bukan crash)
     acc = _StreamAccumulator()
     acc.feed(_fake_chunk("", [{"index": 0, "function": {"name": "x", "arguments": "{oops"}}]))
     try:
@@ -278,7 +308,7 @@ async def _self_test() -> None:
     else:
         raise AssertionError("argumen invalid harus raise LLMError")
 
-    # 4. Error mapping: auth, not-found, retry koneksi 3x
+    # 5. Error mapping: auth, not-found, retry koneksi 3x
     from unittest.mock import patch
 
     cfg = Config(model="openai/gpt-4o", api_key="sk-bad")

@@ -38,7 +38,9 @@ def render_snapshot(data: dict[str, Any]) -> str:
     else:
         lines.append(f"Git: {data.get('git', '—')}")
     toks = data.get("tokens", 0)
-    lines.append(f"Context: ~{toks:,} tokens".replace(",", "."))
+    # int = estimasi (kasih ~); str = sudah diformat caller (resmi provider).
+    toks_s = f"~{toks:,}".replace(",", ".") if isinstance(toks, int) else str(toks)
+    lines.append(f"Context: {toks_s} tokens")
     lines.append(f"Session: {data.get('messages', 0)} pesan · "
                  f"{data.get('tools', 0)} tools")
     lines.append(f"Model: {data.get('model', '?')}")
@@ -68,6 +70,10 @@ if __name__ == "__main__":
                          "tokens": 12450, "messages": 12, "tools": 8,
                          "model": "groq/llama"})
     assert "myapp" in s and "~12.450 tokens" in s and "12 pesan" in s
+    s2 = render_snapshot({"mode": "code", "project": "p", "git": "g",
+                          "tokens": "12.450", "messages": 1, "tools": 0,
+                          "model": "m"})
+    assert "Context: 12.450 tokens" in s2 and "~" not in s2.split("Context:")[1]
     r = render_snapshot({"mode": "research", "project": "p", "round": "2/5",
                          "sources": "6 read", "tokens": 0, "messages": 1,
                          "tools": 0, "model": "m"})

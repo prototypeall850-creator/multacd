@@ -17,6 +17,7 @@ from core.agent_loop import (
     AgentText,
     AgentToolDone,
     AgentToolStart,
+    AgentUsage,
     run_agent,
 )
 from core.codebase import get_git_summary
@@ -134,6 +135,8 @@ class MainScreen(Screen):
         # Textual MessagePump (dioverwrite framework saat pump start).
         self._turn_running = False
         self._tools_run = 0  # counter sesi buat info panel
+        self._sess_prompt = 0  # token resmi provider (0 = belum ada laporan)
+        self._sess_completion = 0
 
     def compose(self) -> ComposeResult:
         yield StatusBar()
@@ -238,6 +241,10 @@ class MainScreen(Screen):
         try:
             chars = sum(len(str(m.get("content", "")))
                         for m in self.app.context.get_messages())
+            real_total = self._sess_prompt + self._sess_completion
+            # Token resmi kalau provider melapor; kalau tidak, heuristik ~.
+            tokens_s = (f"{real_total:,}".replace(",", ".") if real_total
+                        else f"~{estimate_tokens(chars):,}".replace(",", "."))
             git = self.app.git_summary
             git_s = "—"
             if git.get("is_repo"):
@@ -248,7 +255,7 @@ class MainScreen(Screen):
                 "mode": self.app.mode_manager.get_mode(),
                 "project": self.app.project_label,
                 "git": git_s,
-                "tokens": estimate_tokens(chars),
+                "tokens": tokens_s,
                 "messages": len(self.app.context),
                 "tools": self._tools_run,
                 "model": self.app.cfg.model,
@@ -485,6 +492,9 @@ class MainScreen(Screen):
                                                event.success, event.result)
                 elif isinstance(event, AgentDone):
                     pass  # teks sudah ter-stream penuh
+                elif isinstance(event, AgentUsage):
+                    self._sess_prompt += event.prompt_tokens
+                    self._sess_completion += event.completion_tokens
                 elif isinstance(event, AgentError):
                     await chat.add_error(event.message)
         finally:

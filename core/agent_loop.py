@@ -77,11 +77,19 @@ class AgentDone:
 
 
 @dataclass
+class AgentUsage:
+    """Token resmi provider untuk satu panggilan LLM (0 = tak dilapor)."""
+
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+
+@dataclass
 class AgentError:
     message: str
 
 
-AgentEvent = AgentText | AgentToolStart | AgentToolDone | AgentDone | AgentError
+AgentEvent = AgentText | AgentToolStart | AgentToolDone | AgentDone | AgentUsage | AgentError
 
 
 async def _stdin_confirm(tool_name: str, params: dict[str, Any]) -> str:
@@ -168,6 +176,7 @@ async def run_agent(
                         yield AgentText(event.content)
                 elif isinstance(event, StreamDone):
                     done = event
+                    yield AgentUsage(done.prompt_tokens, done.completion_tokens)
             if done is None:
                 # Provider aneh: stream tutup tanpa StreamDone — jangan
                 # biarkan assert mentah, kasih pesan yang bisa dibaca user.
@@ -270,9 +279,10 @@ if __name__ == "__main__":
         events = await _drain(run_agent("ls", ctx, cfg, llm_client=fake,
                                         confirm=_no_confirm))
         kinds = [type(e).__name__ for e in events]
-        assert kinds == ["AgentText", "AgentText", "AgentToolStart", "AgentToolDone",
-                         "AgentText", "AgentDone"], kinds
-        assert events[3].success is True
+        assert kinds == ["AgentText", "AgentText", "AgentUsage", "AgentToolStart",
+                         "AgentToolDone", "AgentText", "AgentUsage",
+                         "AgentDone"], kinds
+        assert events[4].success is True
         tool_msgs = [m for m in ctx.get_messages() if m["role"] == "tool"]
         assert len(tool_msgs) == 1 and tool_msgs[0]["tool_call_id"] == "c1"
         # assistant message membawa tool_calls format OpenAI
@@ -289,7 +299,7 @@ if __name__ == "__main__":
         ])
         ctx = ConversationContext()
         events = await _drain(run_agent("tulis", ctx, cfg, llm_client=fake, confirm=_deny))
-        assert events[0].name == "write_file" and events[1].success is False
+        assert events[1].name == "write_file" and events[2].success is False
         assert "Dibatalkan user" in ctx.get_messages()[-2]["content"]
 
         # 4. "all" = sesi ini auto seterusnya
@@ -315,7 +325,7 @@ if __name__ == "__main__":
         ])
         ctx = ConversationContext()
         events = await _drain(run_agent("x", ctx, cfg, llm_client=fake, confirm=_no_confirm))
-        assert events[1].success is False
+        assert events[2].success is False
         assert "tidak tersedia" in ctx.get_messages()[-2]["content"]
         assert isinstance(events[-1], AgentDone)
 
@@ -339,7 +349,7 @@ if __name__ == "__main__":
         ctx = ConversationContext()
         events = await _drain(run_agent("tanya", ctx, cfg, llm_client=fake,
                                         confirm=_no_confirm, ask_user=_answer))
-        assert events[1].success is True
+        assert events[2].success is True
         assert "budi" in ctx.get_messages()[-2]["content"]
 
         # 8. Slash command dicegat — LLM tidak dipanggil, history bersih
