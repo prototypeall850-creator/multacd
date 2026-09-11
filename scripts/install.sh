@@ -58,16 +58,7 @@ pip_fallback() {
     if is_termux; then
         # Jujur: binary rilis (build ubuntu glibc) TIDAK jalan di Termux
         # (bionic libc) — Termux wajib jalur pip.
-        echo "Termux terdeteksi — pakai jalur pip (binary rilis tidak kompatibel)."
-        echo ""
-        echo "  1. Siapkan toolchain (sekali saja):"
-        echo "     pkg install -y python git curl"
-        echo "     (ringan: tanpa kompilasi Rust — dependensi wheel murni)"
-        echo ""
-        echo "  2. Install multacd:"
-        echo "     pip install \"git+https://github.com/$REPO\""
-        echo ""
-        echo "  3. Jalankan: multacd"
+        termux_pip_guide
         exit 1
     fi
     echo "Install binary gagal / platform belum ada binary-nya."
@@ -76,8 +67,33 @@ pip_fallback() {
     echo "Lalu jalankan: multacd"
 }
 
+termux_pip_guide() {
+    # Pin beta exact TANPA --pre: pip tetap boleh install versi beta yang
+    # dipin, sementara dependensi resolve ke versi stabil (anti httpx-dev /
+    # apscheduler-alpha / pydantic-beta). --pre bocor ke semua deps!
+    echo "Termux terdeteksi — pakai jalur pip (binary rilis tidak kompatibel)."
+    echo ""
+    echo "  1. Siapkan toolchain (sekali saja):"
+    echo "     pkg install -y python git curl"
+    echo "     (ringan: tanpa kompilasi Rust — dependensi wheel murni)"
+    echo ""
+    echo "  2. Install multacd:"
+    echo "     pip install \"multacd==2.0.0b3\""
+    echo ""
+    echo "  3. Jalankan: multacd"
+    echo ""
+    echo "  Opsional (provider search Exa, butuh Rust — lewati kalau ragu):"
+    echo "     pip install \"multacd[exa]\""
+}
+
 main() {
     local platform url tmp dest_dir dest
+    # Termux: tidak ada binary yang kompatibel (glibc vs bionic) — jangan
+    # buang waktu nyoba unduh URL yang pasti 404, langsung panduan pip.
+    if is_termux; then
+        termux_pip_guide
+        exit 1
+    fi
     platform="$(detect_platform)"
     if [ "$platform" = "unsupported" ]; then
         pip_fallback "platform tidak dikenal ($(uname -s)/$(uname -m))."
