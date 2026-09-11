@@ -63,6 +63,8 @@ SELF_TEST_MODULES = [
     "search_providers",
     "briefing.privacy",
     "tg.access_control",
+    "tg.formatter",
+    "tg.agent",
     "tg.handlers",
     "tg.bot",
 ]

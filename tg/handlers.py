@@ -5,7 +5,7 @@ Struktur dua lapis:
     on_message()    — async PTB handler, I/O via update/context saja.
 
 Step 3: user/admin dapat echo placeholder (+ /start, /help).
-Step 4: echo diganti agent loop.
+Step 4: pesan biasa → agent loop (tg.agent), pending Y/N via pesan berikut.
 
 Test cepat:
     python -m tg.handlers
@@ -116,23 +116,66 @@ def route_message(user_id: int, username: str, text: str,
 
 
 async def on_message(update: Any, context: Any) -> None:
-    """Semua pesan teks → route → reply. Stranger juga trigger notif admin."""
+    """Semua pesan → route. Stranger dibalas+notice; user/admin ke agent."""
+    from tg.agent import resolve_pending, run_telegram_turn
+
     msg = update.effective_message or update.message
     user = update.effective_user
-    ac: AccessControl = context.bot_data["ac"]
-    admin_username: str = context.bot_data.get("admin_username", "")
-    admin_id: int = context.bot_data.get("admin_id", 0)
-    result = route_message(user.id, getattr(user, "username", "") or "",
-                           msg.text or "", ac, admin_username)
+    bot_data = context.bot_data
+    ac: AccessControl = bot_data["ac"]
+    admin_username: str = bot_data.get("admin_username", "")
+    admin_id: int = bot_data.get("admin_id", 0)
+    text = msg.text or ""
+    user_id = user.id
+
+    if ac.check(user_id) == "stranger":
+        await msg.reply_text(stranger_reply(admin_username)[:TG_MAX_MESSAGE])
+        if admin_id:
+            with _suppress():
+                await context.bot.send_message(
+                    chat_id=admin_id,
+                    text=stranger_admin_notice(
+                        user_id, getattr(user, "username", "") or "",
+                        text)[:TG_MAX_MESSAGE])
+        return
+
+    # Jawaban untuk pending confirm/ask dari turn yang jalan.
+    pending = resolve_pending(bot_data, user_id, text)
+    if pending == "handled":
+        return
+    busy = bot_data.setdefault("busy", set())
+    if pending == "answered-new" and user_id in busy:
+        await msg.reply_text("Bukan Y/N — tool ditolak. ⏳ Tunggu turn "
+                             "selesai, lalu kirim ulang perintahmu.")
+        return
+
+    if user_id in busy:
+        await msg.reply_text("⏳ Masih proses, tunggu sebentar ya.")
+        return
+
+    result = route_message(user_id, getattr(user, "username", "") or "",
+                           text, ac, admin_username)
     if result.user_reply:
         await msg.reply_text(result.user_reply[:TG_MAX_MESSAGE])
-    if result.echo:
-        # Step 3 placeholder (Step 4: ganti agent loop).
-        await msg.reply_text(f"echo: {(msg.text or '')[:TG_MAX_MESSAGE - 10]}")
-    if result.admin_notice and admin_id:
-        with _suppress():
-            await context.bot.send_message(chat_id=admin_id,
-                                           text=result.admin_notice[:TG_MAX_MESSAGE])
+        return
+    if text.strip() == "/clear":
+        bot_data.setdefault("contexts", {}).pop(user_id, None)
+        await msg.reply_text("🧹 History dihapus. Mulai fresh!")
+        return
+    if text.strip() == "/briefing":
+        await msg.reply_text("Briefing otomatis datang sesuai jadwal "
+                             "(Step 7). Sabar ya ⏳")
+        return
+
+    busy.add(user_id)
+    try:
+        await run_telegram_turn(update, context, text)
+    finally:
+        busy.discard(user_id)
+        # Sisa pending yatim (timeout race) jangan gantung selamanya.
+        item = bot_data.get("pending", {}).pop(user_id, None)
+        if item is not None and not item["future"].done():
+            item["future"].cancel()
 
 
 class _suppress:
@@ -220,5 +263,50 @@ if __name__ == "__main__":
     _asyncio.run(on_message(_upd, _ctx))
     assert any("Akses tidak tersedia" in r for r in _upd.message.replies)
     assert _ctx.bot.sent and _ctx.bot.sent[0][0] == 1
+
+    # 6. User → agent turn (FakeLLM, tanpa provider).
+    from core.llm_client import StreamDone as _SD
+    from core.llm_client import StreamText as _ST
+
+    class _FakeLLM:
+        async def stream_completion(self, messages, tools=None):
+            for word in ["Siap", "**bos**!"]:
+                yield _ST(word + " ")
+            yield _SD("Siap **bos**!", [])
+
+    class _Bot2(_Bot):
+        async def send_chat_action(self, chat_id: int, action: str) -> None:
+            pass
+
+    class _Chat:
+        id = 2
+
+    class _Update2(_Update):
+        def __init__(self) -> None:
+            self.effective_message = _Msg("halo bot")
+            self.message = self.effective_message
+            self.effective_user = _User()
+            self.effective_user.id = 2
+            self.effective_chat = _Chat()
+
+    class _Ctx2:
+        def __init__(self) -> None:
+            self.bot_data = {"ac": _ac, "admin_username": "bos",
+                             "admin_id": 1, "config": _cfg,
+                             "llm": _FakeLLM()}
+            self.bot = _Bot2()
+
+    _upd2, _ctx2 = _Update2(), _Ctx2()
+    _asyncio.run(on_message(_upd2, _ctx2))
+    assert any("Siap bos!" in r for r in _upd2.message.replies), \
+        _upd2.message.replies
+
+    # 7. /clear hapus context user.
+    _upd3, _ctx3 = _Update2(), _Ctx2()
+    _ctx3.bot_data["contexts"] = {2: object()}
+    _upd3.message.text = "/clear"
+    _asyncio.run(on_message(_upd3, _ctx3))
+    assert 2 not in _ctx3.bot_data["contexts"]
+    assert any("History" in r for r in _upd3.message.replies)
 
     print("✅ handlers self-test OK (route + admin cmd + async fake)")
