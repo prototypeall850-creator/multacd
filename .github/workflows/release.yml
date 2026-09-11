@@ -100,8 +100,8 @@ jobs:
             Termux (binary rilis tidak kompatibel — pakai pip):
 
             ```bash
-            pkg install -y python rust git binutils
-            pip install "git+https://github.com/prototypeall850-creator/multacd"
+            pkg install -y python git
+            pip install "multacd==2.0.0b2" --pre
             ```
 
             Windows (PowerShell):

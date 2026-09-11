@@ -2,6 +2,16 @@
 
 Format: Keep a Changelog. Versi: Semantic Versioning.
 
+## [2.0.0b2] - 2026-09-12
+
+Beta v2 kedua: cabut LiteLLM, ganti provider native (httpx, 2 adapter
+SSE: OpenAI-compatible + Anthropic) — install pip Termux ringan tanpa
+Rust, binary susut 91MB ke 56MB. Cost estimasi lokal ala OpenCode
+tampil di info panel. Interface stream_completion tidak berubah.
+
+Install beta: `pip install --pre "multacd==2.0.0b2"` (PyPI pre-release)
+atau binary dari halaman GitHub prerelease.
+
 ## [2.0.0b1] - 2026-09-12
 
 Beta v2 buat test Termux: redesign TUI (tanpa emoticon, responsif),
