@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# install.sh — multacd installer (Linux / macOS / Termux). Phase 5 Step 6.
-#   curl -fsSL https://raw.githubusercontent.com/prototypeall850-creator/multacd/main/scripts/install.sh | bash
+# install.sh — multacd installer (Linux / macOS / Termux).
+#
+# Cara pakai (download dulu biar gagalnya kelihatan — JANGAN pipe-buta):
+#   curl -fSL https://raw.githubusercontent.com/prototypeall850-creator/multacd/main/scripts/install.sh -o /tmp/m-install.sh \
+#     && bash /tmp/m-install.sh
+# Pipe `curl ... | bash` menelan error curl (stdin bash kosong = diam saja).
 #
 # Env override (buat test / mirror sendiri):
 #   MULTACD_REPO         "owner/repo" (default: prototypeall850-creator/multacd)
@@ -41,7 +45,31 @@ detect_platform() {
     esac
 }
 
+is_termux() {
+    [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux" ]
+}
+
 pip_fallback() {
+    # $1 = sebab (opsional): ditampilkan di baris pertama biar diagnosa jelas.
+    if [ -n "${1:-}" ]; then
+        echo "Gagal: $1" >&2
+    fi
+    if is_termux; then
+        # Jujur: binary rilis (build ubuntu glibc) TIDAK jalan di Termux
+        # (bionic libc) — Termux wajib jalur pip.
+        echo "Termux terdeteksi — pakai jalur pip (binary rilis tidak kompatibel)."
+        echo ""
+        echo "  1. Siapkan toolchain (sekali saja, ~10 menit di HP):"
+        echo "     pkg install -y python rust git binutils"
+        echo "     (paket 'rust' wajib: dependensi litellm di-build dari source"
+        echo "     di Termux karena belum ada wheel Android-aarch64)"
+        echo ""
+        echo "  2. Install multacd:"
+        echo "     pip install \"git+https://github.com/$REPO\""
+        echo ""
+        echo "  3. Jalankan: multacd"
+        exit 1
+    fi
     echo "Install binary gagal / platform belum ada binary-nya."
     echo "Alternatif via pip (butuh Python 3.10+):"
     echo "  pip install \"git+https://github.com/$REPO\""
@@ -52,7 +80,7 @@ main() {
     local platform url tmp dest_dir dest
     platform="$(detect_platform)"
     if [ "$platform" = "unsupported" ]; then
-        pip_fallback
+        pip_fallback "platform tidak dikenal ($(uname -s)/$(uname -m))."
         exit 1
     fi
     echo "Installing multacd untuk $platform..."
@@ -62,12 +90,21 @@ main() {
     # shellcheck disable=SC2064
     trap "rm -f '$tmp'" EXIT
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "$url" -o "$tmp" || { pip_fallback; exit 1; }
+        curl -fSL "$url" -o "$tmp" || {
+            pip_fallback "unduh binary gagal dari $url (cek koneksi/TLS; pastikan 'pkg install curl' di Termux)"
+            exit 1
+        }
     elif command -v wget >/dev/null 2>&1; then
-        wget -qO "$tmp" "$url" || { pip_fallback; exit 1; }
+        wget -O "$tmp" "$url" || {
+            pip_fallback "unduh binary gagal dari $url (cek koneksi/TLS)"
+            exit 1
+        }
     else
-        echo "Butuh curl atau wget." >&2
-        pip_fallback
+        pip_fallback "butuh curl atau wget (Termux: pkg install curl)."
+        exit 1
+    fi
+    if [ ! -s "$tmp" ]; then
+        pip_fallback "file terunduh kosong dari $url."
         exit 1
     fi
     chmod +x "$tmp"
@@ -93,8 +130,7 @@ main() {
         echo "multacd berhasil diinstall: $("$dest" --version)"
         echo "Jalankan: multacd"
     else
-        echo "Binary terinstall di $dest tapi gagal jalan." >&2
-        pip_fallback
+        pip_fallback "binary terinstall di $dest tapi gagal jalan (kemungkinan libc tidak cocok)."
         exit 1
     fi
 }
