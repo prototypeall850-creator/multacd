@@ -150,7 +150,7 @@ class SourcesPanel(Vertical):
 
     async def on_key(self, event: events.Key) -> None:
         # Permission menunggu → Y/N/A/Esc jawab dulu (Enter tetap preview).
-        if event.key.lower() in ("y", "n", "a", "escape"):
+        if event.key.lower() in ("y", "n", "a", "e", "b", "escape"):
             try:
                 from tui.widgets.permission_popup import PermissionPopup
                 perm = self.screen.query_one(PermissionPopup)

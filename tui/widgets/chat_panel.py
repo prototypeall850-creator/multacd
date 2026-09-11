@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import suppress
 from typing import Any
 
@@ -117,6 +118,23 @@ class ChatPanel(VerticalScroll):
         lines.append(line[-200:])  # baris super panjang dipotong
         del lines[:-self.LIVE_LINES]
         widget.update("\n".join(lines))
+        self.scroll_end(animate=False)
+
+    async def add_diff_preview(self, workdir: str = ".") -> None:
+        """Preview diff otomatis (#4) — tampil sebelum dialog approve commit."""
+        from tools.git.git_diff import git_diff
+        from tui.widgets.diff_viewer import render_diff
+        try:
+            res = await asyncio.to_thread(git_diff, workdir)
+        except Exception:
+            return
+        if not res.get("success"):
+            return
+        text = str(res.get("result", ""))
+        if not text.strip() or text.strip() == "(tidak ada output)":
+            await self.mount(Static("(tidak ada perubahan buat di-commit)"))
+        else:
+            await self.mount(Static(render_diff(text)))
         self.scroll_end(animate=False)
 
     async def drop_live_output(self, call_id: str) -> None:

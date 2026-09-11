@@ -205,6 +205,20 @@ class PermissionChecker:
             from tools.personal.send_telegram import is_file_content
             if is_file_content((params or {}).get("content", "")):
                 return "ask"
+        # #4: git_commit selalu minta approve (dialog Pakai/Edit) — commit
+        # tanpa terlihat itu cara tercepat kehilangan kepercayaan user.
+        if tool_name == "git_commit":
+            return "ask"
+        # #4: git_push ke branch dilindungi → dialog (opsi buat branch baru).
+        # allow_protected=true = LLM sudah opt-in eksplisit → auto normal.
+        # Branch biasa → auto (tidak cerewet tiap push fitur).
+        if tool_name == "git_push" and not (params or {}).get("allow_protected"):
+            from tools.git.git_push import PROTECTED_BRANCHES, _current_branch
+            target = (params or {}).get("branch", "") or ""
+            target = target.strip() or (_current_branch(
+                str((params or {}).get("workdir", "."))) or "")
+            if not target or target in PROTECTED_BRANCHES:
+                return "ask"  # tak ter-resolve = aman: tanya dulu
         return check_permission(tool_name, self.config)
 
 
@@ -248,10 +262,14 @@ if __name__ == "__main__":
     for t in sorted(NO_SESSION_APPROVAL - GIT_TOOLS):
         checker2.approve_all_for_session(t)
         assert checker2.check(t) == "ask", t
-    # git_push auto by category (GIT_TOOLS — guard aslinya gate
-    # allow_protected di tool), [A] tidak mengubah keputusannya.
+    # git_push auto by category HANYA buat branch biasa; di branch
+    # dilindungi (atau tak ter-resolve) → ask (dialog + opsi buat branch).
+    # [A] tidak berlaku (RISKY) — session-approve tak mengubahnya.
     checker2.approve_all_for_session("git_push")
-    assert checker2.check("git_push") == "auto"
+    assert checker2.check("git_push", {"branch": "fitur-x"}) == "auto"
+    assert checker2.check("git_push", {"branch": "main"}) == "ask"
+    assert checker2.check("git_push", {"branch": "main",
+                                       "allow_protected": True}) == "auto"
     # ...tapi tool biasa (bash, write_file) tetap bisa session-approved.
     checker2.approve_all_for_session("bash")
     assert checker2.check("bash") == "auto"
@@ -268,6 +286,12 @@ if __name__ == "__main__":
         "send_telegram", {"content": "halo"}) == "auto"
     assert PermissionChecker().check(
         "send_telegram", {"content": __file__}) == "ask"
+
+    # #4: git_commit selalu ask (dialog Pakai/Edit) walau anggota GIT_TOOLS.
+    assert check_permission("git_commit") == "auto"  # kategori tetap
+    assert PermissionChecker().check("git_commit") == "ask"
+    assert PermissionChecker().check(
+        "git_commit", {"message": "x"}) == "ask"
 
     # Plugin overlay: default ask, auto eksplisit, unknown tetap deny.
     assert check_permission("plugin_xyz") == "deny"

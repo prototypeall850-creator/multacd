@@ -351,7 +351,7 @@ class MainScreen(Screen):
         """Fallback permission: kalau bar menunggu dan tombol jawab ditekan
         di widget lain (tree/panel), teruskan. InputBar sudah handle duluan
         untuk kasusnya sendiri (TextArea menelan keystrokes)."""
-        if event.key.lower() not in ("y", "n", "a", "enter", "escape"):
+        if event.key.lower() not in ("y", "n", "a", "e", "b", "enter", "escape"):
             return
         try:
             perm = self.query_one(PermissionPopup)
@@ -559,7 +559,21 @@ class MainScreen(Screen):
         bar.set_status("waiting")
         think.hide()  # permission bar gantikan thinking bar sementara
         try:
-            return await perm.ask(tool_name, params)
+            # #4: preview diff otomatis sebelum approve commit.
+            if tool_name == "git_commit":
+                await self.query_one(ChatPanel).add_diff_preview(
+                    str(params.get("workdir", ".")))
+            ans = await perm.ask(tool_name, params)
+            # #4: Edit → dialog pesan baru (prefill). Batal = tolak.
+            if ans == "edit:":
+                cur = str(params.get("message", ""))
+                new_msg = await self.app.push_screen(
+                    AskDialog("Edit pesan commit:", initial=cur),
+                    wait_for_dismiss=True)
+                if not new_msg or new_msg == "(dibatalkan)":
+                    return "no"
+                return f"edit:{new_msg}"
+            return ans
         finally:
             bar.set_status("thinking")
             think.show("thinking")

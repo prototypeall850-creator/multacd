@@ -97,14 +97,28 @@ AgentEvent = AgentText | AgentToolStart | AgentToolDone | AgentDone | AgentUsage
 
 async def _stdin_confirm(tool_name: str, params: dict[str, Any]) -> str:
     target = params.get("path") or params.get("command") or params.get("url") or ""
-    print(f"⚠️  {tool_name} {target} — izinkan? [y/n/a] ", end="", flush=True)
+    extra = ""
+    if tool_name == "git_commit":
+        extra = "/e edit pesan"
+    elif tool_name == "git_push":
+        extra = "/b branch baru"
+    print(f"⚠️  {tool_name} {target} — izinkan? [y/n/a{extra}] ", end="", flush=True)
     try:
         ans = await asyncio.to_thread(input)
     except (EOFError, KeyboardInterrupt):
         return "no"
-    ans = ans.strip().lower()
+    ans = ans.strip()
     if ans in ("a", "all"):
         return "all"
+    if ans in ("e", "edit") and tool_name == "git_commit":
+        try:
+            new_msg = await asyncio.to_thread(
+                input, f"Pesan baru [{params.get('message', '')}]: ")
+        except (EOFError, KeyboardInterrupt):
+            return "no"
+        return f"edit:{new_msg.strip() or params.get('message', '')}"
+    if ans in ("b", "branch") and tool_name == "git_push":
+        return "branch"
     return "yes" if ans in ("y", "yes") else "no"
 
 
@@ -224,6 +238,36 @@ async def run_agent(
                 if choice == "all":
                     checker.approve_all_for_session(call.name)
                     choice = "yes"
+                # #4: user edit pesan commit → pakai pesan baru, lanjut yes.
+                if choice.startswith("edit:"):
+                    new_msg = choice[len("edit:"):].strip()
+                    if not new_msg:
+                        choice = "no"  # edit dibatalkan = tolak
+                    elif "message" in call.arguments:
+                        call.arguments["message"] = new_msg
+                        choice = "yes"
+                    else:
+                        choice = "yes"
+                # #4: user pilih buat branch baru (push protected) → buat
+                # branch, arahkan push ke sana, lanjut yes.
+                if choice == "branch":
+                    new_branch = (await ask_cb(
+                        "Nama branch baru buat push (kosongkan = batal)?"
+                    ) or "").strip()
+                    if not new_branch:
+                        choice = "no"
+                    else:
+                        made = await asyncio.to_thread(
+                            execute_tool, "git_checkout",
+                            {"workdir": call.arguments.get("workdir", "."),
+                             "branch": new_branch, "create": True})
+                        if not made.get("success"):
+                            context.add_tool_result(call.id, call.name, made)
+                            yield AgentToolDone(call.id, call.name, False, made)
+                            continue
+                        call.arguments["branch"] = new_branch
+                        call.arguments.pop("allow_protected", None)
+                        choice = "yes"
                 if choice != "yes":
                     cancel_result = fail(
                         f"Dibatalkan user — jangan coba {call.name} yang sama lagi, "
@@ -422,7 +466,55 @@ if __name__ == "__main__":
         assert ctx.get_messages()[0]["content"].startswith("SOULKU"), \
             ctx.get_messages()[0]["content"][:100]
 
-        print("✅ agent_loop self-test OK (10 skenario)")
+        # 11. #4 edit pesan commit: confirm "edit:X" → commit pakai X
+        import subprocess as _sp
+        import tempfile as _tf
+        from pathlib import Path as _Path
+        tmp = _Path(_tf.mkdtemp(prefix="multacd-commit-"))
+        _sp.run(["git", "-C", str(tmp), "init", "-b", "main"],
+                capture_output=True, timeout=30, check=True)
+        _sp.run(["git", "-C", str(tmp), "config", "user.email", "t@t"],
+                capture_output=True, timeout=30, check=True)
+        _sp.run(["git", "-C", str(tmp), "config", "user.name", "t"],
+                capture_output=True, timeout=30, check=True)
+        (tmp / "a.txt").write_text("x")
+        _sp.run(["git", "-C", str(tmp), "add", "."],
+                capture_output=True, timeout=30, check=True)
+
+        async def _edit(name, params):
+            assert name == "git_commit", name
+            return "edit:pesan edit e2e"
+        fake5 = FakeLLM([StreamDone("", [_TCR(
+            "c1", "git_commit",
+            {"workdir": str(tmp), "message": "pesan awal"})]),
+            StreamDone("done", [])])
+        ctx = ConversationContext()
+        events = await _drain(run_agent("commit", ctx, cfg, llm_client=fake5,
+                                        confirm=_edit))
+        assert any(isinstance(e, AgentToolDone) and e.success for e in events)
+        log = _sp.run(["git", "-C", str(tmp), "log", "--format=%s"],
+                      capture_output=True, text=True, timeout=30)
+        assert "pesan edit e2e" in log.stdout, log.stdout
+
+        # 12. #4 branch baru: push main ditolak → "branch" → buat + push ulang
+        async def _branch(name, params):
+            assert name == "git_push", name
+            return "branch"
+        fake6 = FakeLLM([StreamDone("", [_TCR(
+            "c1", "git_push", {"workdir": str(tmp)})]),
+            StreamDone("done", [])])
+        ctx = ConversationContext()
+        events = await _drain(run_agent(
+            "push", ctx, cfg, llm_client=fake6, confirm=_branch,
+            ask_user=lambda q: _asyncio.sleep(0, result="fitur-e2e")))
+        br = _sp.run(["git", "-C", str(tmp), "branch", "--list"],
+                     capture_output=True, text=True, timeout=30)
+        assert "fitur-e2e" in br.stdout, br.stdout
+        push_done = [e for e in events if isinstance(e, AgentToolDone)]
+        assert push_done and "fitur-e2e" in str(
+            ctx.get_messages()), "push harus diarahkan ke branch baru"
+
+        print("✅ agent_loop self-test OK (12 skenario)")
 
     async def _no_confirm(name, params):
         raise AssertionError(f"tidak boleh minta konfirmasi untuk {name}")

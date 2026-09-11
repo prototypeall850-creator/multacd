@@ -32,7 +32,7 @@ class InputBar(TextArea):
         # apapun yang fokus (TextArea menelan keystrokes miliknya sendiri).
         perm = self._waiting_perm()
         if perm is not None and event.key.lower() in (
-                "y", "n", "a", "enter", "escape"):
+                "y", "n", "a", "e", "b", "enter", "escape"):
             event.prevent_default()
             event.stop()
             perm.answer_key(event.key)

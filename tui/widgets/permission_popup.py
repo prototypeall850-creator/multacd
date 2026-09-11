@@ -1,15 +1,17 @@
-"""Permission popup — panel izin di atas input (ganti permission 1-baris).
+"""Permission popup — panel izin di atas input (#4 v2: aksi kontekstual).
 
-Kenapa tombol beneran: routing key ke baris statis rapuh (tergantung
-fokus widget — lihat issue #19). Tombol bisa diklik mouse, difokus
-Tab/arrow, DAN tetap respons Y/N/A:
+Tombol pendek (muat 40 kolom Termux):
 
     write_file  src/utils/helper.py
-    [ Allow (Y) ]  [ Deny (N) ]  [ All (A) ]
+    [ Yes (Y) ]  [ No (N) ]  [ All (A) ]
 
-    ! delete_file  src/old.py  permanent (merah, tanpa tombol All)
+    git_commit  "feat: x"           [diff preview otomatis di chat]
+    [ Yes (Y) ]  [ Edit (E) ]  [ No (N) ]  [ All (A) ]
 
-Kontrak ke agent_loop tetap "yes" | "no" | "all".
+    ! git_push  main (protected)    [tanpa All — RISKY]
+    [ Yes (Y) ]  [ Branch (B) ]  [ No (N) ]
+
+Kontrak ke agent_loop: "yes" | "no" | "all" | "edit:<pesan>" | "branch".
 """
 
 from __future__ import annotations
@@ -40,12 +42,41 @@ def prompt_of(tool_name: str, params: dict[str, Any]) -> str:
     risky = tool_name in RISKY_TOOLS
     pre = f"[bold red]{icons.icon('warning')} [/]" if risky else ""
     name_style = "bold red" if risky else "bold cyan"
+    if tool_name == "git_commit":  # #4: pesan commit ikut tampil
+        first = str(params.get("message", "")).strip().splitlines()
+        msg = first[0][:60] if first else "(tanpa pesan)"
+        return f"[{name_style}]{tool_name}[/]  [dim]\"{msg}\"[/]"
+    if tool_name == "git_push":  # #4: target branch ikut tampil
+        br = str(params.get("branch", "") or "(aktif)")
+        prot = "  [red](protected)[/]" if _is_protected_push(params) else ""
+        return f"{pre}[{name_style}]{tool_name}[/]  [dim]{br}[/]{prot}"
     post = "  [red]permanent[/]" if risky else ""
     return f"{pre}[{name_style}]{tool_name}[/]  [dim]{target_of(params)}[/]{post}"
 
 
+def _is_protected_push(params: dict[str, Any]) -> bool:
+    """True kalau push ini menyasar branch dilindungi (tanpa opt-in).
+
+    Baca git lokal (cepat, tanpa network). Gagal resolve → False
+    (tombol Branch diputuskan ask() via checker yang ask duluan).
+    """
+    if params.get("allow_protected"):
+        return False
+    try:
+        from tools.git.git_push import PROTECTED_BRANCHES, _current_branch
+    except Exception:
+        return False
+    target = str(params.get("branch", "")).strip()
+    if not target:
+        try:
+            target = _current_branch(str(params.get("workdir", "."))) or ""
+        except Exception:
+            return False
+    return target in PROTECTED_BRANCHES
+
+
 class PermissionPopup(Vertical):
-    """Panel izin + 3 tombol. ask() tampil + fokus + tunggu, resolve future."""
+    """Panel izin + tombol. ask() tampil + fokus + tunggu, resolve future."""
 
     can_focus = False
 
@@ -53,25 +84,40 @@ class PermissionPopup(Vertical):
         super().__init__(id="permission-popup")
         self._future: asyncio.Future[str] | None = None
         self._allow_all = True
+        self._extra = ""  # "" | "edit" (git_commit) | "branch" (git_push)
 
     def compose(self) -> ComposeResult:
         yield Static("", id="perm-prompt")
         with Horizontal(id="perm-buttons"):
-            yield Button("Allow (Y)", id="perm-yes", variant="success")
-            yield Button("Deny (N)", id="perm-no", variant="error")
+            yield Button("Yes (Y)", id="perm-yes", variant="success")
+            yield Button("Edit (E)", id="perm-extra-edit", variant="primary")
+            yield Button("Branch (B)", id="perm-extra-branch", variant="primary")
+            yield Button("No (N)", id="perm-no", variant="error")
             yield Button("All (A)", id="perm-all", variant="warning")
 
     async def ask(self, tool_name: str, params: dict[str, Any]) -> str:
-        """Tampilkan popup, tunggu tombol/keyboard. Return yes/no/all."""
+        """Tampilkan popup, tunggu tombol/keyboard.
+
+        Return yes/no/all/edit:<pesan>/branch.
+        """
         loop = asyncio.get_running_loop()
         self._future = loop.create_future()
         # [A] disembunyikan untuk tool yang kontraknya tidak boleh session-
         # approve (eksekusi kode, research, risky) — bukan cuma risky,
         # biar tombolnya tidak jadi janji palsu (klik [A] tapi tak persist).
         self._allow_all = tool_name not in NO_SESSION_APPROVAL
+        # #4: aksi kontekstual — Edit pesan (commit) / Branch baru (push).
+        if tool_name == "git_commit":
+            self._extra = "edit"
+        elif tool_name == "git_push" and _is_protected_push(params):
+            self._extra = "branch"
+        else:
+            self._extra = ""
         self.query_one("#perm-prompt", Static).update(
             prompt_of(tool_name, params))
         self.query_one("#perm-all", Button).display = self._allow_all
+        self.query_one("#perm-extra-edit", Button).display = self._extra == "edit"
+        self.query_one("#perm-extra-branch", Button).display = self._extra == "branch"
         self.display = True
         self.query_one("#perm-yes", Button).focus()
         try:
@@ -96,7 +142,7 @@ class PermissionPopup(Vertical):
             self._future.set_result(value)
 
     def answer_key(self, key: str) -> bool:
-        """Rute Y/N/A/Enter/Esc/arrows. True kalau dikonsumsi."""
+        """Rute Y/N/A/E/B/Enter/Esc/arrows. True kalau dikonsumsi."""
         key = key.lower()
         if key == "y":
             self._resolve("yes")
@@ -107,6 +153,12 @@ class PermissionPopup(Vertical):
         if key == "a" and self._allow_all:
             self._resolve("all")
             return True
+        if key == "e" and self._extra == "edit":
+            self._resolve("edit:")
+            return True
+        if key == "b" and self._extra == "branch":
+            self._resolve("branch")
+            return True
         if key in ("left", "right"):
             self._cycle(key == "right")
             return True
@@ -116,7 +168,9 @@ class PermissionPopup(Vertical):
         """Pindah fokus antar tombol yang kelihatan (arrow)."""
         try:
             btns = [b for b in self.query(Button)
-                    if b.id in ("perm-yes", "perm-no", "perm-all") and b.display]
+                    if b.id in ("perm-yes", "perm-no", "perm-all",
+                                "perm-extra-edit", "perm-extra-branch")
+                    and b.display]
         except Exception:
             return
         if not btns:
@@ -133,7 +187,8 @@ class PermissionPopup(Vertical):
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         self._resolve({"perm-yes": "yes", "perm-no": "no",
-                       "perm-all": "all"}[event.button.id])
+                        "perm-all": "all", "perm-extra-edit": "edit:",
+                        "perm-extra-branch": "branch"}[event.button.id])
 
     async def on_key(self, event: events.Key) -> None:
         # Enter di tombol = klik native (jangan dobel-resolve ke yes —
@@ -158,15 +213,27 @@ if __name__ == "__main__":
     assert "write_file" in s and "src/h.py" in s and "Allow" not in s
     r = prompt_of("delete_file", {"path": "old.py"})
     assert "permanent" in r
+    c = prompt_of("git_commit", {"message": "feat: tambah x"})
+    assert "git_commit" in c and "feat: tambah x" in c
+    p = prompt_of("git_push", {"branch": "main"})
+    assert "git_push" in p and "main" in p and "protected" in p
+    p2 = prompt_of("git_push", {"branch": "fitur"})
+    assert "protected" not in p2
 
     from tui.widgets.permission_popup import PermissionPopup as _PP
 
     bar = _PP.__new__(_PP)
     bar._future = None
     bar._allow_all = True
+    bar._extra = ""
     assert bar.answer_key("y") and bar.answer_key("n")
     assert bar.answer_key("a") and bar.answer_key("left")
     assert not bar.answer_key("z")
+    assert not bar.answer_key("e") and not bar.answer_key("b")
     bar._allow_all = False
     assert not bar.answer_key("a")
-    print("✅ permission_popup self-test OK (prompt + keys)")
+    bar._extra = "edit"
+    assert bar.answer_key("e")
+    bar._extra = "branch"
+    assert bar.answer_key("b")
+    print("✅ permission_popup self-test OK (prompt + keys + extra)")
