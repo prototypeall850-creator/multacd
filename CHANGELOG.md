@@ -2,6 +2,17 @@
 
 Format: Keep a Changelog. Versi: Semantic Versioning.
 
+## [2.0.0b4] - 2026-09-12
+
+Beta v2 keempat — Termux harusnya tembus sekarang (#24): `pydantic`
+dibuang total (pydantic-core Rust, 0 wheel Android dari 159 rilis —
+config rewrite ke dataclass + ConfigError, API konstruktor identik),
+`tavily-python` jadi extra `[tavily]` (bawa tiktoken Rust),
+`APScheduler<4` (kunci alpha rewrite), binary susut ke 33MB.
+
+Install: `pip install "multacd==2.0.0b4"` (tanpa --pre, tanpa rust,
+tanpa compiler — pyyaml fallback pure-python).
+
 ## [2.0.0b3] - 2026-09-12
 
 Beta v2 ketiga — benerin install Termux (#24): `exa-py` jadi extra

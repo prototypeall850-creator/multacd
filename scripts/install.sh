@@ -78,7 +78,7 @@ termux_pip_guide() {
     echo "     (ringan: tanpa kompilasi Rust — dependensi wheel murni)"
     echo ""
     echo "  2. Install multacd:"
-    echo "     pip install \"multacd==2.0.0b3\""
+    echo "     pip install \"multacd==2.0.0b4\""
     echo ""
     echo "  3. Jalankan: multacd"
     echo ""
