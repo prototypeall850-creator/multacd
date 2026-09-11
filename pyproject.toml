@@ -77,6 +77,8 @@ exclude = [
     ".venv",
     ".git",
     "dist",
+    "dist_bin",  # artifact binary CI (90MB x N) — jangan ikut sdist!
+    "dist_pkg",
     "build",
     "site",
     ".pytest_cache",
