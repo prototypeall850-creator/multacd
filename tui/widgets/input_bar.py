@@ -6,6 +6,7 @@ from textual import events
 from textual.message import Message
 from textual.widgets import TextArea
 
+from tui.widgets.model_selector import ModelSelector
 from tui.widgets.permission_popup import PermissionPopup
 from tui.widgets.slash_palette import SlashPalette
 
@@ -37,6 +38,30 @@ class InputBar(TextArea):
             perm.answer_key(event.key)
             return
         pal = self._open_palette()
+        sel = self._open_selector()
+        if sel is not None:
+            # Mode selector: navigasi milik selector, ketikan = filter query.
+            if event.key in ("up", "down"):
+                event.prevent_default()
+                event.stop()
+                sel.move(1 if event.key == "down" else -1)
+                return
+            if event.key == "enter":
+                event.prevent_default()
+                event.stop()
+                self.screen.model_select()
+                return
+            if event.key == "escape":
+                event.prevent_default()
+                event.stop()
+                sel.close()
+                self.clear()
+                return
+            if event.key == "ctrl+f":
+                event.prevent_default()
+                event.stop()
+                self.screen.model_favorite()
+                return
         if pal is not None:
             # Palette terbuka → tombol dinavigasi palette, bukan editing.
             if event.key in ("up", "down"):
@@ -78,6 +103,14 @@ class InputBar(TextArea):
         except Exception:
             return None
         return pal if pal.is_open else None
+
+    def _open_selector(self) -> ModelSelector | None:
+        """Model selector yang sedang terbuka (None kalau tutup)."""
+        try:
+            sel = self.screen.query_one(ModelSelector)
+        except Exception:
+            return None
+        return sel if sel.is_open else None
 
     def _waiting_perm(self) -> PermissionPopup | None:
         """PermissionPopup yang menunggu jawaban (None kalau tidak ada)."""

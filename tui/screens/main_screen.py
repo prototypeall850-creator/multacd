@@ -25,7 +25,9 @@ from tui.widgets.chat_panel import ChatPanel
 from tui.widgets.confirm_dialog import AskDialog
 from tui.widgets.diff_viewer import DiffViewer
 from tui.widgets.file_tree import FileOpenRequested, ProjectTree, modified_files
+from tui.widgets.info_panel import InfoPanel, estimate_tokens
 from tui.widgets.input_bar import InputBar, InputSubmitted
+from tui.widgets.model_selector import ModelSelector
 from tui.widgets.permission_popup import PermissionPopup
 from tui.widgets.slash_palette import SlashPalette
 from tui.widgets.sources_panel import (
@@ -44,6 +46,8 @@ class MainScreen(Screen):
         ("ctrl+t", "toggle_tree", "File tree"),
         ("ctrl+g", "toggle_diff", "Diff"),
         ("ctrl+r", "toggle_sources", "Sources"),
+        ("ctrl+o", "open_models", "Models"),
+        ("ctrl+i", "toggle_info", "Info"),
     ]
 
     CSS = """
@@ -80,6 +84,13 @@ class MainScreen(Screen):
         border-left: solid $primary;
         padding: 0 1;
     }
+    #info-panel {
+        width: 25%;
+        min-width: 20;
+        display: none;
+        border-left: solid $accent;
+        padding: 0 1;
+    }
     #diff-viewer {
         display: none;
         height: auto;
@@ -92,6 +103,14 @@ class MainScreen(Screen):
         height: auto;
         max-height: 12;
         border: solid $primary;
+        background: $surface;
+        padding: 0 1;
+    }
+    #model-selector {
+        display: none;
+        height: auto;
+        max-height: 16;
+        border: solid $accent;
         background: $surface;
         padding: 0 1;
     }
@@ -114,6 +133,7 @@ class MainScreen(Screen):
         # NOTE: jangan pakai nama `_running` — itu atribut internal
         # Textual MessagePump (dioverwrite framework saat pump start).
         self._turn_running = False
+        self._tools_run = 0  # counter sesi buat info panel
 
     def compose(self) -> ComposeResult:
         yield StatusBar()
@@ -121,10 +141,12 @@ class MainScreen(Screen):
             yield ChatPanel()
             yield ProjectTree(self.app.workdir)
             yield SourcesPanel()
+            yield InfoPanel()
         yield DiffViewer()
         yield ThinkingBar()
         yield PermissionPopup()
         yield SlashPalette()
+        yield ModelSelector()
         yield InputBar()
 
     def on_mount(self) -> None:
@@ -203,8 +225,63 @@ class MainScreen(Screen):
         tree = self.query_one(ProjectTree)
         if tree.display:
             tree.mark_modified(modified_files(self.app.workdir))
+        self._refresh_info()
+
+    def _refresh_info(self) -> None:
+        """Update info panel (kalau tampil) — tak pernah raise."""
+        try:
+            info = self.query_one(InfoPanel)
+        except Exception:
+            return
+        if not info.display:
+            return
+        try:
+            chars = sum(len(str(m.get("content", "")))
+                        for m in self.app.context.get_messages())
+            git = self.app.git_summary
+            git_s = "—"
+            if git.get("is_repo"):
+                git_s = str(git.get("branch", "?"))
+                if git.get("modified"):
+                    git_s += f" +{git['modified']}"
+            data: dict = {
+                "mode": self.app.mode_manager.get_mode(),
+                "project": self.app.project_label,
+                "git": git_s,
+                "tokens": estimate_tokens(chars),
+                "messages": len(self.app.context),
+                "tools": self._tools_run,
+                "model": self.app.cfg.model,
+            }
+            if data["mode"] == "research":
+                try:
+                    src = self.query_one(SourcesPanel)
+                    cur, tot = src._round
+                    read = sum(1 for it in src._items
+                               if it.get("status") in ("scraped", "snippet"))
+                    data["round"] = f"{cur}/{tot}"
+                    data["sources"] = f"{read} read"
+                    data["topic"] = "aktif" if cur else "—"
+                except Exception:
+                    pass
+            info.update_snapshot(data)
+        except Exception:
+            pass
+
+    def action_toggle_info(self) -> None:
+        """Ctrl+I: tampil/sembunyi info panel (DESIGN §11)."""
+        info = self.query_one(InfoPanel)
+        info.display = not info.display
+        if info.display:
+            self._refresh_info()
+        else:
+            self.query_one(InputBar).focus()
 
     async def on_input_submitted(self, event: InputSubmitted) -> None:
+        sel = self.query_one(ModelSelector)
+        if sel.is_open:
+            self.model_select()
+            return
         self.query_one(SlashPalette).close()
         self._submit(event.value)
 
@@ -212,8 +289,15 @@ class MainScreen(Screen):
         """Ketik / di awal input → buka palette, filter real-time."""
         if event.text_area.id != "input-bar":
             return
-        pal = self.query_one(SlashPalette)
         text = event.text_area.text
+        sel = self.query_one(ModelSelector)
+        if sel.is_open:
+            # Mode selector: teks polos = query filter (bukan command).
+            if not text.startswith("/"):
+                sel.refilter(text)
+                return
+            sel.close()  # user ketik / → keluar mode selector
+        pal = self.query_one(SlashPalette)
         if pal.suppress_next:
             pal.suppress_next = False
             pal.close()
@@ -274,8 +358,40 @@ class MainScreen(Screen):
             return  # abaikan submit ganda saat agent berpikir
         if not text.strip():
             return
+        # /model tanpa argumen → buka selector popup (DESIGN §12 v2),
+        # bukan sekadar print model aktif.
+        if text.strip().lower() == "/model":
+            self.model_open()
+            return
         self._turn_running = True
         self.run_worker(self._run_turn(text))
+
+    def action_open_models(self) -> None:
+        """Ctrl+O: buka model selector (DESIGN §12)."""
+        self.model_open()
+
+    def model_open(self) -> None:
+        """Buka selector; tutup palette kalau sedang terbuka."""
+        self.query_one(SlashPalette).close()
+        self.query_one(ModelSelector).open(self.app.cfg.model)
+        self.query_one(InputBar).focus()
+
+    def model_select(self) -> None:
+        """Enter di selector: submit '/model <nama>' kayak ketik manual."""
+        sel = self.query_one(ModelSelector)
+        inbar = self.query_one(InputBar)
+        name = sel.selected
+        if name:
+            sel.mark_used(name)
+        sel.close()
+        inbar.clear()
+        inbar.focus()
+        if name:
+            self._submit(f"/model {name}")
+
+    def model_favorite(self) -> None:
+        """Ctrl+F di selector: tandai favorit."""
+        self.query_one(ModelSelector).toggle_favorite()
 
     def action_toggle_tree(self) -> None:
         """Ctrl+T: tampil/sembunyi file tree (+ tandai file modified)."""
@@ -364,6 +480,7 @@ class MainScreen(Screen):
                     await chat.add_tool_row(event.call_id, event.name, event.params)
                 elif isinstance(event, AgentToolDone):
                     think.show("thinking")
+                    self._tools_run += 1
                     await chat.update_tool_row(event.call_id, event.name,
                                                event.success, event.result)
                 elif isinstance(event, AgentDone):
