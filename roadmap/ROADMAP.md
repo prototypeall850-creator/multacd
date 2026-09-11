@@ -185,7 +185,6 @@ Fitur yang mungkin masuk v1.1.0:
   More themes (Tokyo Night, Nord, Dracula)
 
 Fitur yang mungkin masuk v1.2.0:
-  LSP integration (Language Server Protocol) untuk coding agent
   Multi-project workspace (bisa kelola beberapa project sekaligus)
   Voice input (via Whisper API)
 
@@ -199,6 +198,54 @@ Redesign v2 full bebas (dikerjakan sekarang, baseline Termux v0.119):
   Shell: splash v2 + layout hemat (done)
   Done: model selector (S12, Ctrl+O + /model), info panel (S11, Ctrl+I)
   Research context (round/sources/token ~) tampil di info panel mode /research
+  Done b2: provider LLM native (cabut LiteLLM, 2 adapter SSE),
+           cost estimasi lokal di info panel, binary 91MB ke 56MB
+```
+
+### Inspirasi opencode — Tier 1 (gas dulu, effort kecil)
+
+```
+Urutan saran: /undo → AGENTS.md → @mention → sessions → commands.
+Satu kelar langsung beta + test Termux, jangan ditumpuk.
+
+1. /undo + /redo — revert perubahan agent per langkah.
+   Fondasi ada (git flow + branch dialog): catat file sentuh per turn,
+   undo = git checkout file itu. Bikin user berani nyuruh agent.
+2. Custom slash commands (~/.multacd/commands/*.md) — file markdown
+   jadi command (/review, /commit, /rilis). Loader + daftar ke palette.
+3. AGENTS.md per-proyek + /init — agent baca pola proyek sebelum kerja.
+   soul.md global + codebase scan sudah ada; tambah baca AGENTS.md di
+   root proyek + command /init buat generate otomatis.
+4. @ file mention di input — ketik @ muncul fuzzy finder file buat
+   ditempel ke prompt. Selector fuzzy + grouping sudah ada.
+5. Sessions persist — history chat ke SQLite (memory SQLite sudah ada),
+   /resume + list sesi lama. Sekarang konteks hilang tiap keluar.
+```
+
+### Inspirasi opencode — Tier 2 (effort sedang, naik kelas)
+
+```
+6. Keybinds custom di config — semua shortcut bisa di-remap (Textual
+   support binding override, tinggal baca dari config).
+7. Formatters otomatis — habis agent edit file, jalanin formatter
+   (ruff format, prettier) sesuai tipe file. Pasangan /undo.
+8. Subagents paralel — agent utama bisa delegasi riset background
+   (pola kurasi/live paralel wizard sudah ada).
+9. /share — export satu sesi penuh ke markdown rapi + copy
+   (versi murah tanpa server; mirip /copy yang sudah ada).
+10. MCP client — ngomong ke MCP server, buka ekosistem tool ke luar.
+    Standar industri; nambah deps + kompleksitas, timbang saat eksekusi.
+```
+
+### Ditunda / skip (sadar, bukan lupa)
+
+```
+LSP integration — berat RAM/CPU, musuh Termux. Codebase scan cukup
+  untuk 80% kasus. (Coret dari rencana v1.2.0 di bawah.)
+IDE extension / desktop app / web UI — identitas multacd = TUI +
+  Telegram. Fokus.
+Model terkurasi via server (ala Zen) — butuh server + key sendiri,
+  lawan arah BYOK murni.
 ```
 
 ---
