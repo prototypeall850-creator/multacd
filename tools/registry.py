@@ -82,12 +82,16 @@ from tools.personal.cancel_job import SCHEMA as CANCEL_JOB_SCHEMA
 from tools.personal.cancel_job import cancel_job
 from tools.personal.daemon_status import SCHEMA as DAEMON_STATUS_SCHEMA
 from tools.personal.daemon_status import daemon_status
+from tools.personal.generate_briefing import SCHEMA as GENERATE_BRIEFING_SCHEMA
+from tools.personal.generate_briefing import generate_briefing
 from tools.personal.get_jobs import SCHEMA as GET_JOBS_SCHEMA
 from tools.personal.get_jobs import get_jobs
 from tools.personal.schedule_job import SCHEMA as SCHEDULE_JOB_SCHEMA
 from tools.personal.schedule_job import schedule_job
 from tools.personal.send_telegram import SCHEMA as SEND_TELEGRAM_SCHEMA
 from tools.personal.send_telegram import send_telegram
+from tools.personal.user_manager import SCHEMA as USER_MANAGER_SCHEMA
+from tools.personal.user_manager import user_manager
 from tools.research.deep_research import SCHEMA as DEEP_RESEARCH_SCHEMA
 from tools.research.deep_research import deep_research
 from tools.research.export_research import SCHEMA as EXPORT_RESEARCH_SCHEMA
@@ -161,6 +165,8 @@ TOOL_REGISTRY: dict[str, tuple[ToolFunc, dict[str, Any]]] = {
     "cancel_job": (cancel_job, CANCEL_JOB_SCHEMA),
     "get_jobs": (get_jobs, GET_JOBS_SCHEMA),
     "daemon_status": (daemon_status, DAEMON_STATUS_SCHEMA),
+    "user_manager": (user_manager, USER_MANAGER_SCHEMA),
+    "generate_briefing": (generate_briefing, GENERATE_BRIEFING_SCHEMA),
 }
 
 # Fail-fast: registry dan permission harus 1:1. Kalau tidak sama,
@@ -209,7 +215,7 @@ if __name__ == "__main__":
     os.environ["MULTACD_HOME"] = tmp_home
 
     defs = get_tool_definitions()
-    assert len(defs) == len(KNOWN_TOOLS) == 44, len(defs)
+    assert len(defs) == len(KNOWN_TOOLS) == 46, len(defs)
     for d in defs:
         assert d["type"] == "function" and d["function"]["name"], d
 

@@ -88,6 +88,8 @@ PERSONAL_AUTO = frozenset({
 PERSONAL_ASK = frozenset({
     "schedule_job",
     "cancel_job",
+    "user_manager",
+    "generate_briefing",
 })
 PERSONAL_TOOLS = PERSONAL_AUTO | PERSONAL_ASK
 

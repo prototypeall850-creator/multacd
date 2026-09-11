@@ -25,6 +25,8 @@ TELEGRAM_DISABLED = frozenset({
     "multi_edit", "apply_patch", "move_file",       # tulis kompleks
     "delete_file",                                  # tidak bisa undo
     "git_push", "git_commit",                       # risiko remote
+    "user_manager",  # sudah ada /userbaru native, tak perlu via agent
+    "generate_briefing",  # berat (LLM); di TG pakai /briefing native
 })
 
 CONFIRM_TIMEOUT = 60  # detik — sesuai plan
@@ -171,7 +173,7 @@ if __name__ == "__main__":
     from core.config import Config as _Config
     from core.llm_client import StreamDone, StreamText
 
-    # 1. Subset tool: 44 - 9 disabled = 35.
+    # 1. Subset tool: 46 - 11 disabled = 35.
     tools = telegram_tools()
     assert len(tools) == len(TOOL_REGISTRY) - len(TELEGRAM_DISABLED)
     assert "read_file" in tools and "delete_file" not in tools

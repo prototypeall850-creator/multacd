@@ -112,7 +112,13 @@ async def _serve(config: Any) -> None:
     bot = None
     if (config.telegram.bot_token or "").strip():
         from tg.bot import MultacdBot
-        bot = MultacdBot(config)
+        try:
+            bot = MultacdBot(config)
+        except ValueError as e:
+            # Token ngawur (bukan kosong) → jangan crash daemon,
+            # scheduler tetap jalan, admin baca log.
+            print(f"⚠️ bot tidak jalan ({e}) — mode scheduler-only.",
+                  flush=True)
     else:
         print("⚠️ tanpa bot_token — mode scheduler-only.", flush=True)
 

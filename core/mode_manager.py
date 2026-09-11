@@ -1,9 +1,9 @@
 """Mode manager — mode agent + parse slash command.
 
 Mode aktif:
-    code      → Coding Agent (default, penuh di Phase 2)
+    code      → Coding Agent (penuh di Phase 2)
     research  → Research Agent (penuh di Phase 3)
-    personal  → placeholder, aktif Phase 4
+    personal  → Personal Agent (penuh di Phase 4)
 
 Command yang dikenal (lihat HELP_TEXT):
     /code /research /personal /clear /scan /model [nama] /help /soul
@@ -32,7 +32,7 @@ HELP_TEXT = (
     "📖 Command multacd:\n"
     "  /code          → mode Coding Agent (default)\n"
     "  /research      → mode Research Agent (riset internet + sumber)\n"
-    "  /personal      → Personal Agent (coming Phase 4)\n"
+    "  /personal      → Personal Agent (bot, jadwal, briefing, daemon)\n"
     "  /clear         → bersihkan history, mulai sesi baru\n"
     "  /scan          → scan ulang codebase project\n"
     "  /model [nama]  → lihat / ganti model (cth: /model openai/gpt-4o)\n"
@@ -85,9 +85,43 @@ MODE_PROMPTS = {
     ),
     MODE_PERSONAL: (
         "Kamu sedang dalam Personal Agent mode. "
-        "(Placeholder Phase 4 — instruksi penuh menyusul.)"
+        "Kamu punya akses ke: send_telegram, schedule_job, cancel_job, "
+        "get_jobs, daemon_status, user_manager, generate_briefing, "
+        "web_search, quick_research, read tools, git_status, remember, "
+        "recall. "
+        "Tugasmu: kelola bot Telegram (tambah/hapus user), kelola scheduled "
+        "jobs, cek status daemon, buat & kirim briefing, kirim pesan manual. "
+        "Aturan: aksi berdampak (tambah/hapus user, schedule/cancel, kirim "
+        "pesan/file, generate briefing) selalu konfirmasi dulu — tool sudah "
+        "ASK, hormati jawaban user. "
+        "'Kirim briefing sekarang' = konfirmasi, lalu generate_briefing "
+        "(send_to_admin=True kalau user mau dikirim ke Telegram). "
+        "Jangan panggil tool yang tidak ada di daftar."
     ),
 }
+
+# Tool aktif di mode /personal: personal tools + baca + riset ringan.
+# Tulis/shell/eksekusi TIDAK ada — mode ini dashboard manajemen, aman.
+PERSONAL_MODE_TOOLS = [
+    "send_telegram",
+    "schedule_job",
+    "cancel_job",
+    "get_jobs",
+    "daemon_status",
+    "user_manager",
+    "generate_briefing",
+    "web_search",
+    "quick_research",
+    "read_file",
+    "read_many_files",
+    "glob",
+    "grep",
+    "list_dir",
+    "scan_codebase",
+    "git_status",
+    "remember",
+    "recall",
+]
 
 # Tool aktif di mode /research: research tools + read tools Phase 1
 # (web_fetch, read_file, dll tetap aktif — lihat PLAN-phase3 §10).
@@ -163,6 +197,8 @@ class ModeManager:
         """
         if self._mode == MODE_RESEARCH:
             return list(RESEARCH_MODE_TOOLS)
+        if self._mode == MODE_PERSONAL:
+            return list(PERSONAL_MODE_TOOLS)
         if self._git_enabled:
             return None
         from core.permissions import GIT_TOOLS, KNOWN_TOOLS
@@ -190,7 +226,17 @@ class ModeManager:
                 "Ctrl+R panel sumber.",
                 "mode")
         if cmd == "/personal":
-            return CommandResult(True, "🏠 Personal Agent belum tersedia (coming Phase 4) — tetap di mode code.", None)
+            msg = self.set_mode(MODE_PERSONAL)
+            try:
+                from tools.personal.daemon_status import daemon_status
+                snapshot = daemon_status()["result"]
+            except Exception as e:
+                snapshot = f"(status daemon gagal dibaca: {e})"
+            return CommandResult(
+                True,
+                f"{msg} 🏠 — kelola bot, jadwal, briefing, daemon.\n"
+                f"{snapshot}",
+                "mode")
         if cmd == "/clear":
             return CommandResult(True, "🧹 History dibersihkan — mulai sesi baru.", "clear")
         if cmd == "/scan":
@@ -244,7 +290,7 @@ if __name__ == "__main__":
     assert "/scan" in mm.handle_command("/help").message
     assert mm.handle_command("/soul").message == "soul-test"
 
-    # 4. /research aktif (Phase 3); /personal masih placeholder
+    # 4. /research aktif (Phase 3); /personal aktif (Phase 4)
     r = mm.handle_command("/research")
     assert mm.get_mode() == "research" and r.action == "mode", (r, mm.get_mode())
     assert "quick_research" in mm.get_mode_prompt()
@@ -256,7 +302,17 @@ if __name__ == "__main__":
     mm.handle_command("/code")
     assert mm.get_mode() == "code" and mm.get_active_tools() is None
     r = mm.handle_command("/personal")
-    assert "Phase 4" in r.message and mm.get_mode() == "code", (r, mm.get_mode())
+    assert mm.get_mode() == "personal" and r.action == "mode", (r, mm.get_mode())
+    assert "Daemon:" in r.message, r.message  # snapshot status ikut
+    assert "Personal Agent" in mm.get_mode_prompt()
+    active = mm.get_active_tools()
+    assert active is not None and "daemon_status" in active, active
+    assert "user_manager" in active and "generate_briefing" in active
+    assert "get_jobs" in active and "send_telegram" in active
+    assert "bash" not in active and "write_file" not in active  # aman
+    assert "delete_file" not in active and "run_python" not in active
+    mm.handle_command("/code")
+    assert mm.get_mode() == "code"
 
     # 5. /clear dan /scan kasih action signal
     assert mm.handle_command("/clear").action == "clear"

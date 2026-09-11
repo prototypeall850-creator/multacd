@@ -73,6 +73,8 @@ SELF_TEST_MODULES = [
     "tools.personal.cancel_job",
     "tools.personal.get_jobs",
     "tools.personal.daemon_status",
+    "tools.personal.user_manager",
+    "tools.personal.generate_briefing",
     "scheduler.engine",
     "scheduler.jobs.briefing_job",
     "scheduler.jobs.research_job",

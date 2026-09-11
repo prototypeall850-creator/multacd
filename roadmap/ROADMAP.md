@@ -11,7 +11,7 @@
 | Phase 1 | Foundation | ✅ Selesai |
 | Phase 2 | Coding Agent | ✅ Selesai |
 | Phase 3 | Research Agent | ✅ Selesai |
-| Phase 4 | Personal Agent | 📋 Planned |
+| Phase 4 | Personal Agent | ✅ Done |
 | Phase 5 | Polish & Distribution | 📋 Planned |
 
 ---
@@ -117,46 +117,34 @@ markdownify        # convert HTML ke markdown
 
 ---
 
-## Phase 4 — Personal Agent 📋
+## Phase 4 — Personal Agent ✅ (selesai: bot + scheduler + briefing + daemon + /personal)
 
 **Tujuan:** multacd bisa dikontrol dari mana saja, bukan hanya dari terminal.
 
 ```
 Deliverable:
-  [ ] Telegram Gateway:
-        Bot yang bisa terima perintah dari Telegram
-        Jalankan agent loop di background
-        Kirim hasil balik ke Telegram (teks, file, code block)
-        Support perintah /start, /stop, /status
-        Keamanan: whitelist user ID yang boleh akses
-  [ ] WhatsApp Gateway:
-        Integrasi via WhatsApp Business API atau library
-        Fungsionalitas sama seperti Telegram
-        (Catatan: lebih tricky dari Telegram, perlu nomor WA dedicated)
-  [ ] Background Scheduler:
-        Cron-style job scheduler
-        Contoh: setiap pagi jam 7 → kirim briefing ke Telegram
-        Definisikan jadwal di config.yaml
-  [ ] Daily Briefing:
-        Auto-generate ringkasan harian
-        Bisa include: todo list, reminder, summary project
-        Kirim ke Telegram/WA sesuai jadwal
-  [ ] Mode /personal di TUI:
-        Lihat status bot (aktif/nonaktif)
-        Lihat log percakapan dari Telegram/WA
-        Kelola scheduled jobs
-  [ ] Persistent background process:
-        multacd bisa jalan sebagai daemon di background
-        Tidak perlu TUI terbuka terus
-        Kontrol via: systemd (Linux), launchd (macOS), Task Scheduler (Windows)
+  [x] Telegram Gateway:
+        Bot terima perintah, agent loop per-user, konfirmasi Y/N,
+        typing indicator, /start /help /clear, /userbaru /hapususer /daftaruser
+        Keamanan: whitelist admin/user/stranger + notif admin
+        (package tg/ — bukan telegram/, hindari shadow python-telegram-bot #22)
+  [ ] WhatsApp Gateway (ditunda Phase 5 — mulai Telegram dulu sesuai catatan)
+  [x] Background Scheduler:
+        Cron 5 field + nama hari, tabel SQLite persist, mirror live saat start
+        Tool: schedule_job / cancel_job (ASK), get_jobs (AUTO)
+  [x] Daily Briefing:
+        todo + git + berita paralel, PrivacyFilter no-leak, kirim admin
+        Tool: generate_briefing (ASK)
+  [x] Mode /personal di TUI:
+        Prompt + 18 tool khusus, snapshot daemon saat switch,
+        kelola user/job/daemon/briefing dari chat
+  [x] Persistent background process:
+        daemon start/stop/status/logs, PID + log + IPC socket
+        Tanpa token → scheduler-only (bukan crash)
 
-Tools baru di Phase 4:
-  send_telegram    kirim pesan ke Telegram
-  send_whatsapp    kirim pesan ke WhatsApp
-  schedule_job     tambah/hapus scheduled task
-  get_jobs         lihat semua scheduled task
-  daemon_start     jalankan multacd sebagai background process
-  daemon_stop      hentikan background process
+Tools baru di Phase 4 (46 total):
+  send_telegram, schedule_job, cancel_job, get_jobs, daemon_status,
+  user_manager, generate_briefing
 ```
 
 **Estimasi kompleksitas:** Tinggi — perlu setup bot, background process, keamanan akses.
