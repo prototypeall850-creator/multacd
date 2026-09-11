@@ -6,10 +6,11 @@ Auto-detect: powershell di Windows, bash di Linux/macOS/Termux.
 from __future__ import annotations
 
 import platform
-import subprocess
+from collections.abc import Callable
 from typing import Any
 
 from tools.common import fail, ok
+from tools.streaming import run_streaming
 
 SCHEMA: dict[str, Any] = {
     "type": "function",
@@ -38,23 +39,17 @@ def detect_shell() -> list[str]:
     return ["bash", "-c"]
 
 
-def bash(command: str, workdir: str = ".", timeout: int = DEFAULT_TIMEOUT) -> dict[str, Any]:
+def bash(command: str, workdir: str = ".", timeout: int = DEFAULT_TIMEOUT,
+         on_output: Callable[[str], None] | None = None) -> dict[str, Any]:
+    """Jalankan shell. `on_output` opsional (live stream, bukan schema LLM)."""
     shell = detect_shell()
-    try:
-        proc = subprocess.run(
-            [*shell, command],
-            cwd=workdir,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-    except FileNotFoundError:
-        return fail(f"Shell tidak ditemukan: {shell[0]}")
-    except subprocess.TimeoutExpired:
+    res = run_streaming([*shell, command], cwd=workdir, timeout=timeout,
+                        on_output=on_output)
+    if res["timed_out"]:
         return fail(f"Timeout {timeout} dtk: {command}")
-    except OSError as e:
-        return fail(f"Gagal jalan ({e}): {command}")
-    output = (proc.stdout or "") + (proc.stderr or "")
+    if res["exit_code"] == 127 and not res["stdout"] and not res["stderr"]:
+        return fail(f"Shell tidak ditemukan: {shell[0]}")
+    output = (res["stdout"] or "") + (res["stderr"] or "")
     output = output.strip() or "(tidak ada output)"
-    suffix = f"\n[exit code: {proc.returncode}]" if proc.returncode != 0 else ""
+    suffix = f"\n[exit code: {res['exit_code']}]" if res["exit_code"] != 0 else ""
     return ok(output + suffix)

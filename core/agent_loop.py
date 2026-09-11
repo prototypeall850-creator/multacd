@@ -49,6 +49,9 @@ SYSTEM_PROMPT = (
 # confirm: "yes" | "no" | "all" (all = izinkan semua sesi ini)
 ConfirmCallback = Callable[[str, dict[str, Any]], Awaitable[str]]
 AskCallback = Callable[[str], Awaitable[str]]
+# Live output tool: (call_id, baris). Dipanggil dari thread worker tool —
+# TUI wajib marshal (call_from_thread); CLI boleh print langsung.
+OutputCallback = Callable[[str, str], None]
 
 
 @dataclass
@@ -124,6 +127,7 @@ async def run_agent(
     mode_manager: ModeManager | None = None,
     active_tools: list[str] | None = None,
     composer: PromptComposer | None = None,
+    output_cb: OutputCallback | None = None,
 ) -> AsyncIterator[AgentEvent]:
     """Jalankan satu turn agent. Yield AgentEvent secara real-time."""
     def _system_prompt() -> str:
@@ -231,7 +235,13 @@ async def run_agent(
             # to_thread: tool sync jalan di thread, event loop tetap hidup.
             # Tanpa ini, tool research (yang emit event via call_from_thread)
             # deadlock — loop diblok nunggu thread, thread nunggu loop.
-            result = await asyncio.to_thread(execute_tool, call.name, call.arguments)
+            # output_cb (live stream) jalan dari thread itu juga.
+            def _live(line: str, _cid: str = call.id) -> None:
+                assert output_cb is not None
+                output_cb(_cid, line)
+            result = await asyncio.to_thread(
+                execute_tool, call.name, call.arguments,
+                _live if output_cb is not None else None)
             context.add_tool_result(call.id, call.name, result)
             yield AgentToolDone(call.id, call.name, result["success"], result)
 

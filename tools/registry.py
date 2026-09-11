@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import inspect
 import traceback
 from collections.abc import Callable
 from typing import Any
@@ -221,19 +222,36 @@ def plugin_tool_names() -> list[str]:
     return sorted(_PLUGIN_TOOLS)
 
 
+def _supports_output(func: ToolFunc) -> set[str]:
+    """Nama param yang didukung func (inspect aman, gagal → set kosong)."""
+    try:
+        return set(inspect.signature(func).parameters)
+    except (TypeError, ValueError):
+        return set()
+
+
 def is_plugin_tool(name: str) -> bool:
     """True kalau tool berasal dari plugin (bukan builtin)."""
     return name in _PLUGIN_TOOLS
 
 
-def execute_tool(name: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Jalankan tool by name. Selalu return dict {success, result, error}."""
+def execute_tool(name: str, params: dict[str, Any] | None = None,
+                 on_output: Callable[[str], None] | None = None) -> dict[str, Any]:
+    """Jalankan tool by name. Selalu return dict {success, result, error}.
+
+    `on_output` (live stream per baris) diteruskan HANYA ke tool yang
+    mendeklarasikan param itu (run_python/run_tests/bash) — tool lain
+    tak tersentuh, schema LLM tak berubah.
+    """
     entry = TOOL_REGISTRY.get(name)
     if entry is None:
         return fail(f"Tool tidak dikenal: {name}")
     func, _ = entry
+    kwargs = dict(params or {})
+    if on_output is not None and "on_output" in _supports_output(func):
+        kwargs["on_output"] = on_output
     try:
-        return func(**(params or {}))
+        return func(**kwargs)
     except TypeError as e:
         # Bedakan salah-param (signature) vs bug di dalam body tool:
         # TypeError signature terjadi di frame pemanggil saja (1 frame);

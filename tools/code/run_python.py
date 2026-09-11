@@ -4,9 +4,8 @@ Deteksi interpreter: .venv/bin/python di workdir → python3 → python di PATH.
 Snippet ditulis ke temp file dulu, dihapus setelah jalan.
 Timeout → process di-kill, partial output tetap dikembalikan.
 
-NOTE: output di-capture (bukan stream real-time ke TUI) — streaming
-live ditunda ke polish Step 9. Agent tetap terima stdout/stderr penuh
-lewat hasil tool dan melaporkannya ke user.
+NOTE: output di-stream live per baris via `on_output` (TUI tampil real-time)
+kalau caller isi callback; hasil akhir tetap terkumpul utuh buat agent.
 
 Test cepat:
     python -m tools.code.run_python
@@ -16,13 +15,13 @@ from __future__ import annotations
 
 import contextlib
 import shutil
-import subprocess
 import tempfile
-import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from tools.common import fail
+from tools.streaming import run_streaming
 
 SCHEMA: dict[str, Any] = {
     "type": "function",
@@ -65,7 +64,10 @@ def detect_python(workdir: str = ".") -> str | None:
 
 def run_python(file_path: str | None = None, code: str | None = None,
                args: str = "", workdir: str = ".",
-               timeout: int = DEFAULT_TIMEOUT) -> dict[str, Any]:
+               timeout: int = DEFAULT_TIMEOUT,
+               on_output: Callable[[str], None] | None = None) -> dict[str, Any]:
+    """Jalankan Python. `on_output` opsional (live stream per baris, bukan
+    bagian schema LLM — diinjeksikan dispatcher kalau didukung)."""
     if (file_path is None) == (code is None):
         return fail("Isi salah satu: `file_path` atau `code` (tidak boleh kosong/dua-duanya).")
     if timeout <= 0:
@@ -90,33 +92,28 @@ def run_python(file_path: str | None = None, code: str | None = None,
                 return fail(f"File tidak ditemukan: {file_path}")
 
         cmd = [python, target, *(args.split() if args.strip() else [])]
-        start = time.monotonic()
-        try:
-            proc = subprocess.run(cmd, cwd=workdir, capture_output=True,
-                                  text=True, timeout=timeout)
-        except subprocess.TimeoutExpired as e:
-            duration = round(time.monotonic() - start, 2)
+        res = run_streaming(cmd, cwd=workdir, timeout=timeout,
+                            on_output=on_output)
+        duration = res["duration"]
+        if res["timed_out"]:
             return {
                 "success": False,
                 "result": {
-                    "stdout": (e.stdout or b"").decode() if isinstance(e.stdout, bytes)
-                    else (e.stdout or ""),
-                    "stderr": (e.stderr or b"").decode() if isinstance(e.stderr, bytes)
-                    else (e.stderr or ""),
+                    "stdout": res["stdout"],
+                    "stderr": res["stderr"],
                     "exit_code": None,
                     "duration": duration,
                 },
                 "error": f"Program dihentikan karena melebihi batas waktu {timeout} detik.",
             }
-        duration = round(time.monotonic() - start, 2)
         # NOTE: success=True artinya tool jalan sampai selesai (kayak bash) —
         # hasil program lihat di exit_code. Agent yang analisis stdout/stderr.
         return {
             "success": True,
             "result": {
-                "stdout": proc.stdout or "",
-                "stderr": proc.stderr or "",
-                "exit_code": proc.returncode,
+                "stdout": res["stdout"],
+                "stderr": res["stderr"],
+                "exit_code": res["exit_code"],
                 "duration": duration,
             },
             "error": None,

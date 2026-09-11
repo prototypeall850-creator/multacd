@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from typing import Any
 
 from textual import events
@@ -448,6 +449,19 @@ class MainScreen(Screen):
             viewer.refresh_diff(self.app.workdir)
             viewer.display = True
 
+    def _live_sink(self, call_id: str, line: str) -> None:
+        """Terima baris live dari thread worker tool → antre ke app loop."""
+        with suppress(Exception):
+            self.app.call_from_thread(self._queue_live, call_id, line)
+
+    def _queue_live(self, call_id: str, line: str) -> None:
+        """Jalan di app loop: mount/update widget live (thread-safe di sini)."""
+        try:
+            chat = self.query_one(ChatPanel)
+        except Exception:
+            return
+        self.run_worker(chat.add_live_output(call_id, line))
+
     async def _run_turn(self, text: str) -> None:
         chat = self.query_one(ChatPanel)
         bar = self.query_one(StatusBar)
@@ -479,6 +493,7 @@ class MainScreen(Screen):
                 mode_manager=self.app.mode_manager,
                 active_tools=self.app.mode_manager.get_active_tools(),
                 composer=self.app.composer,
+                output_cb=self._live_sink,
             ):
                 if isinstance(event, AgentText):
                     await chat.append_assistant_text(event.delta)
@@ -488,6 +503,7 @@ class MainScreen(Screen):
                 elif isinstance(event, AgentToolDone):
                     think.show("thinking")
                     self._tools_run += 1
+                    await chat.drop_live_output(event.call_id)
                     await chat.update_tool_row(event.call_id, event.name,
                                                event.success, event.result)
                 elif isinstance(event, AgentDone):

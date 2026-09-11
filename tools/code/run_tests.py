@@ -14,12 +14,12 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess
-import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from tools.common import fail, ok
+from tools.streaming import run_streaming
 
 SCHEMA: dict[str, Any] = {
     "type": "function",
@@ -65,7 +65,9 @@ def detect_pytest(workdir: str = ".") -> str | None:
 
 def run_tests(path: str = ".", test_name: str = "",
               verbose: object = False,
-              timeout: int = DEFAULT_TIMEOUT) -> dict[str, Any]:
+              timeout: int = DEFAULT_TIMEOUT,
+              on_output: Callable[[str], None] | None = None) -> dict[str, Any]:
+    """Jalankan pytest. `on_output` opsional (live stream, bukan schema LLM)."""
     pytest = detect_pytest(".")
     if pytest is None:
         return fail("pytest belum terinstall — jalankan: pip install pytest")
@@ -79,17 +81,17 @@ def run_tests(path: str = ".", test_name: str = "",
     if test_name.strip():
         cmd += ["-k", test_name.strip()]
 
-    start = time.monotonic()
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return fail(f"Test dihentikan karena melebihi batas waktu {timeout} detik.")
+        res = run_streaming(cmd, timeout=timeout, on_output=on_output)
     except OSError as e:
         return fail(f"Gagal jalan pytest: {e}")
-    duration = round(time.monotonic() - start, 2)
-    out = proc.stdout or ""
+    if res["timed_out"]:
+        return fail(f"Test dihentikan karena melebihi batas waktu {timeout} detik.")
+    duration = res["duration"]
+    out = res["stdout"] or ""
+    exit_code = res["exit_code"] if res["exit_code"] is not None else 1
 
-    if proc.returncode == 5 or "no tests ran" in out:
+    if exit_code == 5 or "no tests ran" in out:
         return fail(f"Tidak ada test yang ke-collect di: {path}")
 
     passed = failed = errors = skipped = 0

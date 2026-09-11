@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Any
 
 from rich.markdown import Markdown as RichMarkdown
@@ -14,6 +15,8 @@ from tui.widgets.tool_activity import ToolActivity
 
 class ChatPanel(VerticalScroll):
     """Kontainer vertikal; tiap pesan di-mount sebagai widget sendiri."""
+
+    LIVE_LINES = 12  # baris live per tool (cukup buat rasa hidup di HP)
 
     DEFAULT_CSS = """
     ChatPanel .assistant-md {
@@ -30,6 +33,11 @@ class ChatPanel(VerticalScroll):
     ChatPanel .splash-hint {
         text-align: center;
         color: $text-muted;
+    }
+    ChatPanel .live-out {
+        color: $text-muted;
+        padding: 0 1;
+        height: auto;
     }
     """
 
@@ -56,6 +64,7 @@ class ChatPanel(VerticalScroll):
         self._assistant_md: Markdown | None = None
         self._assistant_text = ""
         self._tool_rows: dict[str, ToolActivity] = {}
+        self._live: dict[str, tuple[Static, list[str]]] = {}
 
     async def add_user(self, text: str) -> None:
         await self.mount(Static(Panel(text, title="You", border_style="blue")))
@@ -91,6 +100,31 @@ class ChatPanel(VerticalScroll):
         self._tool_rows[call_id] = row
         await self.mount(row)
         self.scroll_end(animate=False)
+
+    async def add_live_output(self, call_id: str, line: str) -> None:
+        """Tempel baris live output tool (update widget yang sama per call).
+
+        Dipanggil dari thread worker via call_from_thread + run_worker.
+        Max LIVE_LINES terakhir; widget dibuang saat tool done.
+        """
+        entry = self._live.get(call_id)
+        if entry is None:
+            widget = Static("", classes="live-out")
+            await self.mount(widget)
+            entry = (widget, [])
+            self._live[call_id] = entry
+        widget, lines = entry
+        lines.append(line[-200:])  # baris super panjang dipotong
+        del lines[:-self.LIVE_LINES]
+        widget.update("\n".join(lines))
+        self.scroll_end(animate=False)
+
+    async def drop_live_output(self, call_id: str) -> None:
+        """Buang widget live (hasil penuh sudah di ToolActivity)."""
+        entry = self._live.pop(call_id, None)
+        if entry is not None:
+            with suppress(Exception):
+                await entry[0].remove()
 
     async def update_tool_row(self, call_id: str, name: str, success: bool,
                               result: dict[str, Any] | None = None) -> None:
