@@ -1,10 +1,10 @@
 # ⚡ multacd
 
-Agentic TUI: **Coding Agent + Research Agent + Personal Agent** dalam satu terminal.
+Agentic TUI + Telegram: **Coding Agent + Research Agent + Personal Agent**.
 Satu config BYOK (Bring Your Own Key) untuk 100+ LLM provider via LiteLLM.
 
-> Phase 1 (pondasi) — ✅ selesai. Phase 2 (Coding Agent) — ✅ selesai.
-> Phase 3 (Research Agent) — ✅ selesai.
+> Phase 1 (pondasi) — ✅ · Phase 2 (Coding) — ✅ · Phase 3 (Research) — ✅
+> Phase 4 (Personal) — ✅ · 46 tools · 60 tests hijau.
 > Lihat `plan/` untuk detail per phase dan `roadmap/ROADMAP.md` untuk arah besar.
 
 ---
@@ -82,6 +82,16 @@ Opsi:
 python main.py --config /path/ke/config.yaml   # config custom
 python main.py --model openai/gpt-4o            # override model sekali jalan
 python main.py --version                        # tampilkan versi
+python main.py --daemon                         # daemon foreground (tanpa TUI)
+```
+
+Daemon background (jalan terus, dikontrol via Telegram):
+
+```bash
+python main.py daemon start    # jalan di background
+python main.py daemon status   # running + job berikutnya
+python main.py daemon logs     # lihat log (-f buat follow)
+python main.py daemon stop     # hentikan
 ```
 
 ## Cara pakai (TUI)
@@ -116,7 +126,7 @@ Slash command (ketik di input, tanpa panggil LLM):
 |---|---|
 | `/code` | Mode Coding Agent (default) |
 | `/research` | Mode Research Agent (quick/deep research + Ctrl+R panel) |
-| `/personal` | Placeholder Phase 4 |
+| `/personal` | Mode Personal Agent (bot, jadwal, briefing, daemon) |
 | `/clear` | Bersihkan history |
 | `/scan` | Scan ulang codebase |
 | `/model [nama]` | Lihat / ganti model |
@@ -127,30 +137,74 @@ Perilaku tool:
 
 - **Langsung jalan** (tanpa tanya): baca file/folder, `glob`, `grep`,
   `scan_codebase`, `lint_python` (tanpa fix), semua perintah git
-  (kecuali push ke branch utama), ingatan, `todo`, `skill`.
+  (kecuali push ke branch utama), ingatan, `todo`, `skill`,
+  `web_search`, `get_jobs`, `daemon_status`.
 - **Minta izin dulu** (popup Y/N/A): tulis/edit/hapus/pindah file,
   `bash`, `web_fetch`, `run_python`, `run_tests`,
-  `lint_python` dengan fix, push ke `main`/`master`/….
+  `lint_python` dengan fix, push ke `main`/`master`/…,
+  kirim file via `send_telegram`, `schedule_job`/`cancel_job`,
+  `user_manager`, `generate_briefing`.
+
+## Telegram bot (Phase 4)
+
+Isi blok `telegram` di config (atau via setup wizard), lalu:
+
+```yaml
+telegram:
+  bot_token: "123456:AAF..."   # dari @BotFather
+  admin_id: 123456789          # ID kamu (dari @userinfobot)
+  admin_username: "usernamekamu"
+```
+
+```bash
+python main.py daemon start    # bot + scheduler jalan di background
+```
+
+- Stranger yang chat → auto-reply + kamu dapat notifikasi + `/userbaru <id>`
+- User/admin → agent penuh (konfirmasi tool via Y/N, timeout 60 dtk)
+- Kirim file ke bot → agent download & proses; agent bisa kirim file balik
+- 30/46 tool aktif di Telegram (eksekusi kode & hapus file dimatikan)
+
+## Scheduler & briefing (Phase 4)
+
+```yaml
+schedules:
+  - {name: "daily_briefing", cron: "0 7 * * *", action: "briefing"}
+  - {name: "senin_ai", cron: "0 9 * * MON", action: "research",
+     topic: "AI news minggu ini"}
+```
+
+- Cron 5 field + nama hari, persist di `~/.multacd/jobs.db` (survive restart)
+- Briefing pagi: todo + status git + berita (riset paralel) — item
+  `[private]` tidak pernah dikirim ke LLM, muncul di section PRIVATE lokal
+- Juga bisa on-demand dari TUI: `/personal` → "kirim briefing sekarang"
 
 ## Struktur project
 
 ```
 multacd/
-├── main.py            ← entry point
+├── main.py            ← entry point (TUI + daemon start/stop/status/logs)
 ├── core/              ← config, llm_client, agent_loop, permissions,
-│                        mode_manager, codebase, prompt_composer
+│                        mode_manager (/code /research /personal),
+│                        codebase, prompt_composer
 ├── tools/             ← filesystem, shell, git, memory, agent, web,
-│                        code (run_python/lint_python/run_tests),
-│                        codebase (scan_codebase) + registry
-├── tui/               ← app, screens, widgets (tree, diff, dialog)
+│                        code (run/lint/test), codebase, research
+│                        (search/scrape/quick/deep/export),
+│                        personal (telegram/schedule/jobs/daemon/user/
+│                        briefing) + registry (46 tools)
+├── tg/                ← bot Telegram, handler, agent-turn, file, formatter
+├── scheduler/         ← engine cron + tabel jobs + job briefing/research
+├── briefing/          ← generator + privacy filter + sources (todo/git/news)
+├── daemon/            ← process (PID/log/serve) + IPC socket
+├── tui/               ← app, screens (termasuk setup wizard), widgets
 ├── memory/            ← context (short-term) + store SQLite (long-term)
 ├── soul.md            ← kepribadian agent (override: ~/.multacd/soul.md)
 ├── plan/              ← spec per phase
 └── roadmap/           ← arah besar semua phase
 ```
 
-Data personal (config, `memory.db`, skills) tersimpan di `~/.multacd/`
-— tidak pernah di-commit ke repo.
+Data personal (config, `memory.db`, skills, `jobs.db`, `uploads/`, log daemon)
+tersimpan di `~/.multacd/` — tidak pernah di-commit ke repo.
 
 ## Troubleshooting
 
@@ -168,4 +222,5 @@ Data personal (config, `memory.db`, skills) tersimpan di `~/.multacd/`
 - **Phase 1** — Foundation ✅ (config BYOK, ReAct loop, 29 tools, TUI)
 - **Phase 2** — Coding Agent ✅ (scan codebase, run/lint/test, smart git, 34 tools)
 - **Phase 3** — Research Agent ✅ (5 search provider BYOK, quick/deep research, sources panel, 39 tools)
-- **Phase 4** — Personal Agent (Telegram/WA gateway, scheduler, briefing harian)
+- **Phase 4** — Personal Agent ✅ (bot Telegram, scheduler cron, briefing + privasi, daemon, /personal, 46 tools)
+- **Phase 5** — Polish & Distribution 📋 (installer, PyPI, plugin system)
