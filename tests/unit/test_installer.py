@@ -74,9 +74,13 @@ def test_local_install_happy_path(tmp_path: Path):
     """Alur penuh lawan server lokal + binary fake (cepat, tanpa 90MB)."""
     srv = tmp_path / "srv"
     srv.mkdir()
-    fake = srv / "multacd-linux-x86_64"
-    fake.write_text('#!/usr/bin/env bash\necho "multacd 0.9.0-test"\n', encoding="utf-8")
-    fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+    # Sediakan semua nama platform — runner CI apa pun (linux/mac) ketemu.
+    for plat in ("linux-x86_64", "linux-aarch64", "macos-x86_64",
+                 "macos-arm64", "termux-aarch64"):
+        fake = srv / f"multacd-{plat}"
+        fake.write_text('#!/usr/bin/env bash\necho "multacd 0.9.0-test"\n',
+                        encoding="utf-8")
+        fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
     server = _serve_dir(srv)
     try:
         port = server.server_address[1]
