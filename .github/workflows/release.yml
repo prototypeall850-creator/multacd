@@ -76,7 +76,9 @@ jobs:
           path: dist_bin/
       - run: pip install build twine
       - run: python -m build --outdir dist_pkg/
-      - run: twine upload dist_pkg/*
+      # --skip-existing: rerun aman (file yang sudah naik di-skip, bukan error).
+      # --verbose: body error PyPI kelihatan di log kalau 4xx lagi.
+      - run: twine upload --skip-existing --verbose dist_pkg/*
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
