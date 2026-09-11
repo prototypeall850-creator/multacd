@@ -30,3 +30,8 @@ def run_job(action: str, topic: str = "", channel: str = "telegram",
         print(f"⚠️ {msg}")
         return msg
     return handler(topic=topic, channel=channel, cron=cron, name=name)
+
+
+# Handler bawaan Step 7 — import di akhir (registrasi via _register()).
+from scheduler.jobs import briefing_job as _briefing_job  # noqa: E402,F401
+from scheduler.jobs import research_job as _research_job  # noqa: E402,F401

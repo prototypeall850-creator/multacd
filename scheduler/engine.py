@@ -220,8 +220,8 @@ if __name__ == "__main__":
 
     # Handler dispatcher (tanpa network).
     from scheduler.jobs import register_handler, run_job
-    assert "belum tersedia" in str(run_job("briefing", name="t"))
-    register_handler("briefing", lambda **kw: f"ok:{kw['name']}")
-    assert run_job("briefing", name="t") == "ok:t"
+    assert "belum tersedia" in str(run_job("email", name="t"))
+    register_handler("demo", lambda **kw: f"ok:{kw['name']}")
+    assert run_job("demo", name="t") == "ok:t"
 
     print("✅ scheduler self-test OK (cron + persist + config)")

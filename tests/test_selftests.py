@@ -74,6 +74,12 @@ SELF_TEST_MODULES = [
     "tools.personal.get_jobs",
     "tools.personal.daemon_status",
     "scheduler.engine",
+    "scheduler.jobs.briefing_job",
+    "scheduler.jobs.research_job",
+    "briefing.sources.todo_source",
+    "briefing.sources.git_source",
+    "briefing.sources.news_source",
+    "briefing.generator",
 ]
 
 
