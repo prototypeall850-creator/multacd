@@ -61,6 +61,7 @@ SELF_TEST_MODULES = [
     "search_providers.serpapi",
     "search_providers.duckduckgo",
     "search_providers",
+    "briefing.privacy",
 ]
 
 
