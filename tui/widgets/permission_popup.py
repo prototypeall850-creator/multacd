@@ -39,7 +39,7 @@ def prompt_of(tool_name: str, params: dict[str, Any]) -> str:
     """Baris prompt (markup). Pure function."""
     risky = tool_name in RISKY_TOOLS
     pre = f"[bold red]{icons.icon('warning')} [/]" if risky else ""
-    name_style = "bold red" if risky else "bold blue"
+    name_style = "bold red" if risky else "bold cyan"
     post = "  [red]permanent[/]" if risky else ""
     return f"{pre}[{name_style}]{tool_name}[/]  [dim]{target_of(params)}[/]{post}"
 

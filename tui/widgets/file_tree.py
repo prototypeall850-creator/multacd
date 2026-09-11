@@ -1,9 +1,9 @@
-"""File tree — panel kiri project (toggle Ctrl+T).
+"""File tree — panel kanan project (toggle Ctrl+T).
 
 Root di workdir sesi. Filter selaras core/codebase.py: hidden, SKIP_DIRS
 (.venv, plan/, roadmap/, ...), *.pyc, secrets, file planning.
 Enter/klik file → FileOpenRequested(path) ke MainScreen (auto-baca).
-File modified (git) ditandai ● kuning via mark_modified().
+File modified (git) ditandai ● peach via mark_modified().
 """
 
 from __future__ import annotations
@@ -116,6 +116,6 @@ class ProjectTree(DirectoryTree):
                 continue
             label = Path(path).name
             if rel in modified:
-                node.set_label(Text(f"{label} ●", style="yellow"))
+                node.set_label(Text(f"{label} ●", style="#fab387"))
             else:
                 node.set_label(label)

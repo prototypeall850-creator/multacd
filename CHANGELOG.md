@@ -2,6 +2,13 @@
 
 Format: Keep a Changelog. Versi: Semantic Versioning.
 
+## [Unreleased] (menuju 2.0.0 — redesign v2 full bebas)
+
+### Changed (breaking visual, config v1 tetap kebaca)
+- Tema default `multacd-dark` + `multacd-light`/`multacd-min` (Termux hemat)
+- Status bar compact di layar sempit, splash v2, palette fuzzy, thinking statis min-mode
+- Wizard numbering /6, AskDialog responsif, marker git peach
+
 ## [1.0.0] - 2026-09-11
 
 Rilis stabil pertama: coding + research + personal agent dalam satu TUI,

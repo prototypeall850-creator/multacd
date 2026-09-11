@@ -192,6 +192,12 @@ Fitur yang mungkin masuk v1.2.0:
 Fitur yang mungkin masuk v2.0.0:
   Plugin marketplace (cari & install plugin dari registry online)
   Team mode (shared agent untuk beberapa user di jaringan yang sama)
+
+Redesign v2 full bebas (dikerjakan sekarang, baseline Termux v0.119):
+  Fondasi: token semantik + multacd-dark/light/min (done)
+  Widget responsif: status compact, fuzzy palette, no-anim (done)
+  Shell: splash v2 + layout hemat (done)
+  Sisa: model selector (S12), info panel (S11), sources tokens/cost
 ```
 
 ---

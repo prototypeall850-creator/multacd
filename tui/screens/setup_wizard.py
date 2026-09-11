@@ -186,7 +186,7 @@ class SetupWizard(Screen):
             await body.mount(Static("[ Enter ]  Continue"))
             self._hint("Enter lanjut · Ctrl+C batal")
         elif self.step == 1:
-            await body.mount(Static("Setup (1/5) — LLM Provider"))
+            await body.mount(Static("Setup (1/6) — LLM Provider"))
             items = [ListItem(Label(f"{'★ ' if p.id == self.provider.id else ''}"
                                     f"{p.label}")) for p in PROVIDERS]
             lv = ListView(*items, id="wiz-list")
@@ -197,7 +197,7 @@ class SetupWizard(Screen):
             self._hint("Atas/Bawah pilih · Enter lanjut")
         elif self.step == 2:
             await body.mount(Static(
-                f"Setup (2/5) — API Base URL ({self.provider.label})\n"
+                f"Setup (2/6) — API Base URL ({self.provider.label})\n"
                 "Kosongkan untuk default." + (
                     f"\nDefault: {self.provider.default_base}"
                     if self.provider.default_base else "")))
@@ -208,19 +208,19 @@ class SetupWizard(Screen):
             self.query_one("#wiz-input", Input).focus()
         elif self.step == 3:
             await body.mount(Static(
-                f"Setup (3/5) — API Key ({self.provider.label})"))
+                f"Setup (3/6) — API Key ({self.provider.label})"))
             await body.mount(Input(
                 placeholder=self.provider.key_hint or "api key",
                 password=True, id="wiz-input"))
             self._hint("Enter lanjut · karakter disembunyikan")
             self.query_one("#wiz-input", Input).focus()
         elif self.step == 4:
-            await body.mount(Static("Setup (4/5) — Model\nFetching..."))
+            await body.mount(Static("Setup (4/6) — Model\nFetching..."))
             self._hint("tunggu sebentar...")
             self.run_worker(self._load_models())
         elif self.step == 5:
             await body.mount(Static(
-                "Setup (4/5) — Model" + (
+                "Setup (4/6) — Model" + (
                     f"\n! {self.fetch_error}" if self.fetch_error else "")))
             await body.mount(Input(
                 placeholder=f"cth: {self.provider.recommended} "
@@ -235,7 +235,7 @@ class SetupWizard(Screen):
                 self.query_one("#wiz-input", Input).focus()
         elif self.step == 6:
             await body.mount(Static(
-                "Setup (5/5) — Search Provider (opsional)\n"
+                "Setup (5/6) — Search Provider (opsional)\n"
                 "Buat mode /research. Boleh skip."))
             labels = [desc for _, desc in SEARCH_OPTIONS]
             search_lv = ListView(
