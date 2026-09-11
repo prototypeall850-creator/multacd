@@ -1,4 +1,18 @@
 # Tool config untuk multacd (runtime deps tetap di requirements.txt).
+# Phase 5 Step 1: dev extras buat test suite (Step 4 lengkapi [project]).
+
+[project]
+name = "multacd"
+version = "0.0.0"
+description = "Agentic TUI for coding, research, and personal automation"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov",
+    "pytest-asyncio",
+]
 
 [tool.ruff]
 line-length = 120  # style de facto codebase (baris terpanjang ~119)
