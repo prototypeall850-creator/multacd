@@ -17,12 +17,39 @@ class ChatPanel(VerticalScroll):
 
     DEFAULT_CSS = """
     ChatPanel .assistant-md {
-        border: solid green;
+        border: solid $primary;
         padding: 0 1;
         margin: 1 0;
         height: auto;
     }
+    ChatPanel .splash-title {
+        text-align: center;
+        color: $primary;
+        padding: 1 0 0 0;
+    }
+    ChatPanel .splash-hint {
+        text-align: center;
+        color: $text-muted;
+    }
     """
+
+    SPLASH_TIPS = (
+        "Ketik / lalu pilih command · /model ganti model · /help semua command",
+        "Tool baca & git langsung jalan; tulis/shell/web minta izin dulu",
+        "Ctrl+T file tree · Ctrl+G diff · Ctrl+R sumber (mode /research)",
+    )
+
+    async def show_splash(self, version: str, model: str, mode: str = "code") -> None:
+        """Splash v2 (DESIGN §10): logo + model + 1 tip. Sekali saat startup."""
+        from tui import icons as _icons
+        tip = self.SPLASH_TIPS[0]
+        await self.mount(Static(f"[bold]{_icons.icon('app')}  m u l t a c d[/bold]",
+                                classes="splash-title"))
+        await self.mount(Static(f"{mode} · {model} · v{version}",
+                                classes="splash-hint"))
+        await self.mount(Static(f"{_icons.icon('bullet')}  Tip  {tip}",
+                                classes="splash-hint"))
+        self.scroll_end(animate=False)
 
     def __init__(self) -> None:
         super().__init__(id="chat-panel")
@@ -39,7 +66,10 @@ class ChatPanel(VerticalScroll):
         self.scroll_end(animate=False)
 
     async def add_error(self, text: str) -> None:
-        await self.mount(Static(Panel(text, title="⚠️ error", border_style="red")))
+        from tui import icons as _icons
+        await self.mount(Static(
+            Panel(text, title=f"{_icons.icon('error')} error",
+                  border_style="red")))
         self.scroll_end(animate=False)
 
     async def start_assistant(self) -> None:

@@ -60,7 +60,7 @@ class MainScreen(Screen):
     }
     #file-tree {
         width: 25%;
-        min-width: 28;
+        min-width: 20;
         display: none;
         border-left: solid $primary;
     }
@@ -75,7 +75,7 @@ class MainScreen(Screen):
     }
     #sources-panel {
         width: 30%;
-        min-width: 28;
+        min-width: 20;
         display: none;
         border-left: solid $primary;
         padding: 0 1;
@@ -139,9 +139,13 @@ class MainScreen(Screen):
         self.run_worker(self._maybe_update_notice())
 
     async def _git_watcher(self) -> None:
-        """Refresh segmen git status bar tiap 10 dtk (background, tanpa ganggu chat)."""
+        """Refresh segmen git status bar (background, tanpa ganggu chat).
+
+        Min-mode (Termux): 60 dtk sekali — hemat CPU/baterai di HP.
+        """
+        from tui.tokens import is_min_mode as _min
         while True:
-            await asyncio.sleep(10)
+            await asyncio.sleep(60 if _min() else 10)
             try:
                 bar = self.query_one(StatusBar)
             except Exception:
@@ -173,17 +177,14 @@ class MainScreen(Screen):
 
     async def _show_welcome(self) -> None:
         chat = self.query_one(ChatPanel)
-        plug_line = ""
+        await chat.show_splash(self.app.version, self.app.cfg.model,
+                               self.app.mode_manager.get_mode())
         if getattr(self.app, "plugins", None):
             names = ", ".join(p.name for p in self.app.plugins)
-            plug_line = f"\n🔌 Plugin: {names}"
+            await chat.add_info(f"Plugin: {names}")
         await chat.add_info(
-            f"⚡ Selamat datang di multacd v{self.app.version} — model: {self.app.cfg.model}\n"
-            f"📁 {self.app.project_label}{plug_line}\n"
-            "Ketik pesan lalu Enter untuk kirim · Shift+Enter untuk newline · Ctrl+C keluar.\n"
-            "Tool baca & git langsung jalan; tulis/shell/web minta izin [Y/N/A] dulu.\n"
-            "Ketik /help buat daftar command · Ctrl+T file tree · Ctrl+G diff.\n"
-            "Mode riset: /research lalu tanya apa saja · Ctrl+R panel sumber."
+            f"{self.app.project_label} — Enter kirim · /help command · "
+            "tulis/shell/web minta izin dulu."
         )
 
     def _sync_mode_ui(self) -> None:

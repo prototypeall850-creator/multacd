@@ -21,7 +21,8 @@ class AskDialog(ModalScreen[str]):
         align: center middle;
     }
     AskDialog Container {
-        width: 60;
+        width: 80%;
+        max-width: 60;
         height: auto;
         border: thick $primary;
         background: $surface;
@@ -37,8 +38,9 @@ class AskDialog(ModalScreen[str]):
         self.question = question
 
     def compose(self) -> ComposeResult:
+        from tui import icons as _icons
         with Container():
-            yield Static(f"❓ {self.question}")
+            yield Static(f"{_icons.icon('arrow')} {self.question}")
             yield Input(placeholder="ketik jawaban lalu Enter", id="ask-input")
 
     def on_mount(self) -> None:

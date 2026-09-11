@@ -123,14 +123,19 @@ class ToolActivity(Vertical):
         if self._collapsed:
             mark = icons.icon("expand")
             if not self._done:
-                status = f" {icons.icon('pending')}"
+                status = f" [blue]{icons.icon('pending')}[/]"
+                head = (f"[blue]{icons.icon('running')} {self._name}[/]"
+                        f"  [dim]{self._target}[/]{status}  {mark}")
+            elif self._success:
+                status = f" [green]{icons.icon('success')}[/]"
+                head = (f"[green]{self._name}[/]  [dim]{self._target}[/]"
+                        f"{status}  {mark}")
             else:
-                status = (f" {icons.icon('success')}"
-                          if self._success else f" {icons.icon('error')}")
+                status = f" [red]{icons.icon('error')}[/]"
+                head = (f"[red]{self._name}[/]  [dim]{self._target}[/]"
+                        f"{status}  {mark}")
             try:
-                self._head.update(
-                    f"{icons.icon('running')} {self._name}  {self._target}"
-                    f"{status}  {mark}")
+                self._head.update(head)
                 self._body.display = False
             except Exception:
                 pass
