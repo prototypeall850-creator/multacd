@@ -1,18 +1,80 @@
-# Tool config untuk multacd (runtime deps tetap di requirements.txt).
-# Phase 5 Step 1: dev extras buat test suite (Step 4 lengkapi [project]).
+# multacd — packaging & tool config.
+# Runtime deps didefinisikan di [project] (single source buat pip);
+# requirements.txt dipertahankan buat setup venv cepat (mirror).
+# Versi: naikkan ke 1.0.0 saat Step 10 (＋ core/version.py FALLBACK).
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "multacd"
-version = "0.0.0"
+version = "0.9.0"
 description = "Agentic TUI for coding, research, and personal automation"
+readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "multacd contributors" }]
+keywords = ["ai", "agent", "tui", "cli", "coding-agent", "telegram-bot"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console :: Curses",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Terminals",
+]
+
+# Dipakai nyata di codebase (jangan tambah yang tak diimport —
+# gitpython/cryptography di plan belum dipakai, jadi tidak masuk).
+dependencies = [
+    "textual>=0.80.0",
+    "litellm>=1.40.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "httpx>=0.27.0",
+    "beautifulsoup4>=4.12.0",
+    "markdownify>=0.12.0",
+    "tavily-python>=0.3.0",
+    "exa-py>=1.0.0",
+    "python-telegram-bot>=21.0",
+    "APScheduler>=3.10.0",
+]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov",
     "pytest-asyncio",
+    "ruff>=0.4.0",
+    "pyinstaller>=6.0",
 ]
+
+[project.scripts]
+multacd = "main:app"
+
+[project.urls]
+Homepage = "https://github.com/prototypeall850-creator/multacd"
+Issues = "https://github.com/prototypeall850-creator/multacd/issues"
+Changelog = "https://github.com/prototypeall850-creator/multacd/blob/main/CHANGELOG.md"
+
+# Wheel: paket flat di root + entry main.py + soul.md bawaan.
+[tool.hatch.build.targets.wheel]
+packages = [
+    "briefing",
+    "core",
+    "daemon",
+    "memory",
+    "scheduler",
+    "search_providers",
+    "tg",
+    "tools",
+    "tui",
+]
+
+[tool.hatch.build.targets.wheel.force-include]
+"main.py" = "main.py"
+"soul.md" = "soul.md"
 
 [tool.ruff]
 line-length = 120  # style de facto codebase (baris terpanjang ~119)

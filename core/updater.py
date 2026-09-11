@@ -22,11 +22,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from core.version import FALLBACK as FALLBACK_VERSION
+
 PYPI_URL = "https://pypi.org/pypi/multacd/json"
 CHECK_INTERVAL_HOURS = 24
-# Source checkout (belum pip install) → metadata tak ada → pakai ini.
-# Disatukan dengan tui.app.APP_VERSION saat Step 4 (entry point).
-FALLBACK_VERSION = "0.0.0-beta"
 
 
 def update_cache_file() -> Path:

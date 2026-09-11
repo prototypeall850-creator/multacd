@@ -14,12 +14,13 @@ from core.llm_client import LLMClient
 from core.mode_manager import ModeManager
 from core.plugin_loader import load_all
 from core.prompt_composer import PromptComposer, load_soul
+from core.version import get_version
 from memory.context import ConversationContext
 from tui import icons
 from tui.screens.main_screen import MainScreen
 from tui.themes import THEMES, resolve_theme_name
 
-APP_VERSION = "0.0.0-beta"
+APP_VERSION = get_version()
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 

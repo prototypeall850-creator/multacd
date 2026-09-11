@@ -185,3 +185,11 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def app() -> None:
+    """Entry point resmi console_scripts (lihat pyproject [project.scripts]).
+
+    `pip install -e .` → perintah `multacd` di terminal memanggil ini.
+    """
+    raise SystemExit(main())
