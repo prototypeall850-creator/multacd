@@ -13,6 +13,8 @@ from textual.widgets import Static
 
 from tools.git.git_diff import git_diff
 
+MAX_DIFF_LINES = 300
+
 
 class DiffViewer(Static):
     """Panel diff; hidden default, isi via refresh()."""
@@ -31,11 +33,16 @@ class DiffViewer(Static):
 
 
 def render_diff(diff_text: str) -> Text:
-    """Warnai unified diff. Pure function (gampang di-test)."""
+    """Warnai unified diff. Pure function (gampang di-test).
+
+    Dibatasi 300 baris biar diff raksasa tak banjiri layar HP.
+    """
     t = Text()
     if not diff_text.strip() or diff_text.strip() == "(tidak ada output)":
         return Text("(bersih, tidak ada perubahan)", style="dim")
-    for line in diff_text.splitlines():
+    lines = diff_text.splitlines()
+    cut = len(lines) > MAX_DIFF_LINES
+    for line in lines[:MAX_DIFF_LINES]:
         if line.startswith(("+++", "---")):
             t.append(line + "\n", style="dim")
         elif line.startswith("+"):
@@ -48,6 +55,9 @@ def render_diff(diff_text: str) -> Text:
             t.append(line + "\n", style="bold yellow")
         else:
             t.append(line + "\n", style="dim")
+    if cut:
+        t.append(f"…(dipotong, {len(lines) - MAX_DIFF_LINES} baris disembunyikan)",
+                 style="yellow")
     return t
 
 
@@ -65,4 +75,6 @@ if __name__ == "__main__":
     spans = {(s.start, s.end, s.style) for s in out._spans}
     assert any("green" in str(s) for s in out._spans), "baris + harus hijau"
     assert any("red" in str(s) for s in out._spans), "baris - harus merah"
-    print("✅ diff_viewer self-test OK (render + edge)")
+    big = render_diff("\n".join(f"+l{i}" for i in range(400)))
+    assert "dipotong" in str(big) and "100 baris" in str(big)
+    print("✅ diff_viewer self-test OK (render + edge + potong)")

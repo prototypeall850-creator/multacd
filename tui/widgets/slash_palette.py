@@ -113,6 +113,9 @@ class SlashPalette(Vertical):
         except Exception:
             return
         lst.clear()
+        if not self._matches:
+            lst.append(ListItem(Label(f"(tidak ada yang cocok: /{self._needle})")))
+            return
         for cmd, desc in self._matches:
             lst.append(ListItem(Label(render_item(cmd, desc, self._needle))))
         self._highlight()

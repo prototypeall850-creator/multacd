@@ -135,7 +135,10 @@ class SourcesPanel(Vertical):
         for it in self._items:
             if it["url"] == url:
                 body = it["preview"] or "(tidak ada preview konten)"
-                return f"📄 {it['title']}\n{url}\n\n{body}"
+                cut = ""
+                if len(it["preview"]) >= PREVIEW_CHARS:
+                    cut = "\n…(dipotong — buka URL buat utuh)"
+                return f"📄 {it['title']}\n{url}\n\n{body}{cut}"
         return f"(sumber tidak dikenal: {url})"
 
     # ── interaksi ──
