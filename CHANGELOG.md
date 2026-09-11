@@ -2,6 +2,17 @@
 
 Format: Keep a Changelog. Versi: Semantic Versioning.
 
+## [2.0.0b3] - 2026-09-12
+
+Beta v2 ketiga — benerin install Termux (#24): `exa-py` jadi extra
+opsional `[exa]` (rantai Rust jiter tanpa wheel Android), installer
+langsung jalur pip di Termux (tanpa nyoba binary 404), pin beta exact
+tanpa `--pre` (deps resolve stabil, anti httpx-dev/apscheduler-alpha).
+
+Install beta: `pip install "multacd==2.0.0b3"` (tanpa --pre!)
+atau binary dari halaman GitHub prerelease (Linux/macOS/Windows —
+Termux wajib pip).
+
 ## [2.0.0b2] - 2026-09-12
 
 Beta v2 kedua: cabut LiteLLM, ganti provider native (httpx, 2 adapter
@@ -9,8 +20,9 @@ SSE: OpenAI-compatible + Anthropic) — install pip Termux ringan tanpa
 Rust, binary susut 91MB ke 56MB. Cost estimasi lokal ala OpenCode
 tampil di info panel. Interface stream_completion tidak berubah.
 
-Install beta: `pip install --pre "multacd==2.0.0b2"` (PyPI pre-release)
-atau binary dari halaman GitHub prerelease.
+Install beta: `pip install "multacd==2.0.0b2"` (tanpa --pre; pin exact
+otomatis boleh beta, deps tetap stabil) atau binary dari halaman
+GitHub prerelease.
 
 ## [2.0.0b1] - 2026-09-12
 
