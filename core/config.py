@@ -83,7 +83,62 @@ research_deep_queries_per_round: 4  # query per round di deep research
 research_deep_max_sources: 20   # max total sumber deep research
 research_scrape_timeout: 15     # timeout scraping per URL (detik)
 research_snippet_fallback: true # pakai snippet kalau scraping gagal
+
+# ── Telegram Bot (Phase 4, opsional) ───────────────────
+# Diisi via setup wizard atau manual. Kosong = bot nonaktif.
+# telegram:
+#   bot_token: "123456:AAF..."  # dari @BotFather
+#   admin_id: 123456789         # Telegram user ID kamu
+#   admin_username: "usernamekamu"
+#   allowed_users: [987654321]
+
+# ── Scheduler (Phase 4, opsional) ──────────────────────
+# schedules:
+#   - name: "daily_briefing"
+#     cron: "0 7 * * *"
+#     action: "briefing"
+#     channel: "telegram"
+
+# ── Daily Briefing (Phase 4, opsional) ─────────────────
+# briefing:
+#   todo: true
+#   git_status: true
+#   news: true
+#   news_topics: ["artificial intelligence"]
+#   news_sources: 3
 """
+
+
+class TelegramConfig(BaseModel):
+    """Kredensial bot + whitelist (Phase 4). Default kosong = nonaktif."""
+
+    bot_token: str = ""
+    admin_id: int = 0
+    admin_username: str = ""
+    allowed_users: list[int] = Field(default_factory=list)
+
+
+class ScheduleConfig(BaseModel):
+    """Satu jadwal cron (Phase 4). channel: telegram (saat ini satu-satunya)."""
+
+    name: str = Field(min_length=1)
+    cron: str = Field(min_length=1)
+    action: Literal["briefing", "research"] = "briefing"
+    topic: str = ""
+    channel: str = "telegram"
+
+
+class BriefingConfig(BaseModel):
+    """Konten daily briefing (Phase 4)."""
+
+    todo: bool = True
+    news: bool = True
+    git_status: bool = True
+    weather: bool = False  # Phase 5 (butuh API cuaca)
+    news_topics: list[str] = Field(
+        default_factory=lambda: ["artificial intelligence",
+                                 "software engineering"])
+    news_sources: int = Field(default=3, gt=0)
 
 
 class Config(BaseModel):
@@ -125,6 +180,11 @@ class Config(BaseModel):
     research_deep_max_sources: int = Field(default=20, gt=0)
     research_scrape_timeout: int = Field(default=15, gt=0)
     research_snippet_fallback: bool = True
+
+    # ── Personal agent (Phase 4, opsional) ──
+    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+    schedules: list[ScheduleConfig] = Field(default_factory=list)
+    briefing: BriefingConfig = Field(default_factory=BriefingConfig)
 
     @field_validator("search_provider", mode="before")
     @classmethod
@@ -257,6 +317,18 @@ if __name__ == "__main__":
     assert get_active_config() is cfg
     set_active_config(None)
     assert get_active_config() is None
+
+    # Phase 4: nested default + parse dari dict.
+    assert cfg.telegram.bot_token == "" and cfg.schedules == []
+    assert cfg.briefing.news_sources == 3
+    legacy = Config(model="m", api_key="k")  # yaml lama tanpa phase4
+    assert legacy.telegram.admin_id == 0 and legacy.briefing.todo
+    full = Config(model="m", api_key="k", telegram={
+        "bot_token": "t", "admin_id": 1, "admin_username": "u",
+        "allowed_users": [2]},
+        schedules=[{"name": "j", "cron": "0 7 * * *",
+                     "action": "briefing"}])
+    assert full.telegram.admin_id == 1 and full.schedules[0].cron == "0 7 * * *"
 
     print("✅ Config loaded OK")
     print(f"   model               : {cfg.model}")

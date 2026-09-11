@@ -142,6 +142,10 @@ class SetupWizard(Screen):
         self.model = ""
         self.search_provider = "skip"
         self.search_api_key = ""
+        self.telegram_enabled = False
+        self.tg_token = ""
+        self.tg_admin_id = ""
+        self.tg_admin_username = ""
         self.models: list[str] = []
         self.fetch_error = ""
         self.fetch_models_fn = fetch_models  # mockable di test
@@ -252,11 +256,39 @@ class SetupWizard(Screen):
                 await body.mount(Button("Lanjut [Enter]", id="wiz-next"))
             self._hint("Enter lanjut")
         elif self.step == 8:
+            await body.mount(Static(
+                "Setup (6/6) — Telegram bot (opsional)\n"
+                "Kontrol multacd dari HP. Bisa skip, isi nanti."))
+            tg_lv = ListView(
+                ListItem(Label("Ya, setup Telegram")),
+                ListItem(Label("Skip (nanti saja)")), id="wiz-list")
+            await body.mount(tg_lv)
+            tg_lv.focus()
+            self._hint("Atas/Bawah pilih · Enter lanjut")
+        elif self.step == 9:
+            await body.mount(Static(
+                "Telegram — bot token dari @BotFather\n"
+                "Kosongkan untuk lewati."))
+            await body.mount(Input(placeholder="123456:AAF...",
+                                   password=True, id="wiz-input"))
+            self.query_one("#wiz-input", Input).focus()
+            self._hint("Enter lanjut")
+        elif self.step == 10:
+            await body.mount(Static(
+                "Telegram — user ID kamu (angka, dari @userinfobot)\n"
+                "Format: 123456 [username opsional]. Kosongkan = lewati."))
+            await body.mount(Input(placeholder="123456 usernamekamu",
+                                   id="wiz-input"))
+            self.query_one("#wiz-input", Input).focus()
+            self._hint("Enter lanjut")
+        elif self.step == 11:
+            tg_on = "ya" if self.telegram_enabled else "tidak"
             lines = [
                 "Setup selesai", "",
                 f"Provider  : {self.provider.label}",
                 f"Model     : {self.model}",
                 f"Search    : {self.search_provider}",
+                f"Telegram  : {tg_on}",
                 f"Config    : {self.save_path}", "",
             ]
             await body.mount(Static("\n".join(lines)))
@@ -306,6 +338,15 @@ class SetupWizard(Screen):
         elif self.step == 7:
             self.search_api_key = value.strip()
             self.step = 8
+        elif self.step == 9:
+            self.tg_token = value.strip()
+            self.step = 10
+        elif self.step == 10:
+            # Format: "123456 [username]" — username opsional.
+            parts = value.strip().split()
+            self.tg_admin_id = parts[0] if parts else ""
+            self.tg_admin_username = parts[1].lstrip("@") if len(parts) > 1 else ""
+            self.step = 11
         self._show()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -342,6 +383,10 @@ class SetupWizard(Screen):
             self.step = 8 if self.search_provider in ("skip", "duckduckgo") \
                 else 7
             self._show()
+        elif self.step == 8:
+            self.telegram_enabled = (idx == 0)
+            self.step = 9 if self.telegram_enabled else 11
+            self._show()
 
     def _save(self) -> None:
         from core.config import Config
@@ -356,6 +401,20 @@ class SetupWizard(Screen):
         if self.search_provider != "skip":
             data["search_provider"] = self.search_provider
             data["search_api_key"] = self.search_api_key
+        if self.telegram_enabled and (self.tg_token or self.tg_admin_id):
+            tg: dict[str, Any] = {}
+            if self.tg_token:
+                tg["bot_token"] = self.tg_token
+            if self.tg_admin_id:
+                try:
+                    tg["admin_id"] = int(self.tg_admin_id)
+                except ValueError:
+                    self._hint("Admin ID harus angka — Telegram di-skip.")
+                    tg.pop("admin_id", None)
+            if self.tg_admin_username:
+                tg["admin_username"] = self.tg_admin_username
+            if tg:
+                data["telegram"] = tg
         try:
             Config(**data)
         except Exception as e:
