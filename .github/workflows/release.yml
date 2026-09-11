@@ -86,13 +86,22 @@ jobs:
         with:
           files: dist_bin/**/*
           generate_release_notes: true
+          # Tag beta (v2.0.0b1 / vX-rc) → prerelease, bukan final.
+          prerelease: ${{ contains(github.ref_name, 'b') || contains(github.ref_name, '-') }}
           body: |
             ## Install
 
-            Linux / macOS / Termux:
+            Linux / macOS (download dulu biar gagalnya kelihatan):
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/prototypeall850-creator/multacd/main/scripts/install.sh | bash
+            curl -fSL https://raw.githubusercontent.com/prototypeall850-creator/multacd/main/scripts/install.sh -o /tmp/m-install.sh && bash /tmp/m-install.sh
+            ```
+
+            Termux (binary rilis tidak kompatibel — pakai pip):
+
+            ```bash
+            pkg install -y python rust git binutils
+            pip install "git+https://github.com/prototypeall850-creator/multacd"
             ```
 
             Windows (PowerShell):
