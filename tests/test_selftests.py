@@ -84,6 +84,7 @@ SELF_TEST_MODULES = [
     "briefing.sources.git_source",
     "briefing.sources.news_source",
     "briefing.generator",
+    "core.plugin_loader",
 ]
 
 

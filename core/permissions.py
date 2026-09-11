@@ -113,6 +113,23 @@ AUTO_APPROVED: frozenset[str] = READ_TOOLS | META_TOOLS | GIT_TOOLS | SEARCH_TOO
 ASK_REQUIRED: frozenset[str] = WRITE_TOOLS | BASH_TOOLS | WEB_TOOLS | CODE_TOOLS | RESEARCH_TOOLS | PERSONAL_ASK
 KNOWN_TOOLS: frozenset[str] = AUTO_APPROVED | ASK_REQUIRED
 
+# ── Plugin tools (Phase 5 Step 2, mutable overlay) ──
+# Plugin daftar di sini saat load (core/plugin_loader). Terpisah dari
+# frozenset di atas supaya registry ↔ permissions check saat import
+# (lihat tools/registry.py) tidak pecah sebelum plugin di-load.
+# Default "ask" kalau plugin tidak deklarasikan permission (aman).
+PLUGIN_PERMISSIONS: dict[str, Decision] = {}
+
+
+def register_plugin_permission(tool_name: str, level: str = "ask") -> None:
+    """Daftarkan permission tool plugin. Level selain auto/ask → ask."""
+    PLUGIN_PERMISSIONS[tool_name] = "auto" if level == "auto" else "ask"
+
+
+def unregister_plugin_permission(tool_name: str) -> None:
+    """Cabut permission plugin (buat test / reload)."""
+    PLUGIN_PERMISSIONS.pop(tool_name, None)
+
 
 def check_permission(tool_name: str, config: Config | None = None) -> Decision:
     """Return `auto` (langsung jalan), `ask` (konfirmasi dulu), atau
@@ -148,6 +165,8 @@ def check_permission(tool_name: str, config: Config | None = None) -> Decision:
         return "ask"  # schedule/cancel: efek persist, tanpa override
     if tool_name in PERSONAL_TOOLS:
         return "auto"  # eskalasi file→ask ditangani PermissionChecker
+    if tool_name in PLUGIN_PERMISSIONS:
+        return PLUGIN_PERMISSIONS[tool_name]
     return "deny"
 
 
@@ -249,6 +268,17 @@ if __name__ == "__main__":
         "send_telegram", {"content": "halo"}) == "auto"
     assert PermissionChecker().check(
         "send_telegram", {"content": __file__}) == "ask"
+
+    # Plugin overlay: default ask, auto eksplisit, unknown tetap deny.
+    assert check_permission("plugin_xyz") == "deny"
+    register_plugin_permission("plugin_xyz")
+    assert check_permission("plugin_xyz") == "ask"
+    register_plugin_permission("plugin_xyz", "auto")
+    assert check_permission("plugin_xyz") == "auto"
+    register_plugin_permission("plugin_xyz", "ngawur")
+    assert check_permission("plugin_xyz") == "ask"
+    unregister_plugin_permission("plugin_xyz")
+    assert check_permission("plugin_xyz") == "deny"
 
     print(f"✅ permissions self-test OK ({len(KNOWN_TOOLS)} tools: "
           f"{len(AUTO_APPROVED)} auto, {len(ASK_REQUIRED)} ask)")

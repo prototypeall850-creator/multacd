@@ -186,6 +186,46 @@ def get_tool_definitions() -> list[dict[str, Any]]:
     return [schema for _, schema in TOOL_REGISTRY.values()]
 
 
+# ── Runtime registration buat plugin (Phase 5 Step 2) ──
+# Dipanggil core/plugin_loader saat startup. Tool plugin hidup di
+# TOOL_REGISTRY yang sama → execute_tool + get_tool_definitions langsung
+# bisa pakai tanpa perubahan. Nama tabrakan dengan builtin → ditolak
+# (return False) supaya plugin tidak bisa bajak tool inti.
+_PLUGIN_TOOLS: set[str] = set()
+
+
+def register_tool(name: str, func: ToolFunc, schema: dict[str, Any]) -> bool:
+    """Daftarkan tool runtime. False kalau nama sudah ada / schema invalid."""
+    if not name or name in TOOL_REGISTRY:
+        return False
+    try:
+        fname = schema["function"]["name"]
+    except (KeyError, TypeError):
+        return False
+    if fname != name:
+        return False
+    TOOL_REGISTRY[name] = (func, schema)
+    _PLUGIN_TOOLS.add(name)
+    return True
+
+
+def unregister_tool(name: str) -> None:
+    """Cabut tool plugin (buat test / reload). Builtin tidak bisa dicabut."""
+    if name in _PLUGIN_TOOLS:
+        TOOL_REGISTRY.pop(name, None)
+        _PLUGIN_TOOLS.discard(name)
+
+
+def plugin_tool_names() -> list[str]:
+    """Nama tool plugin yang sedang terdaftar."""
+    return sorted(_PLUGIN_TOOLS)
+
+
+def is_plugin_tool(name: str) -> bool:
+    """True kalau tool berasal dari plugin (bukan builtin)."""
+    return name in _PLUGIN_TOOLS
+
+
 def execute_tool(name: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     """Jalankan tool by name. Selalu return dict {success, result, error}."""
     entry = TOOL_REGISTRY.get(name)

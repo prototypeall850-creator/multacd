@@ -154,9 +154,13 @@ class MainScreen(Screen):
 
     async def _show_welcome(self) -> None:
         chat = self.query_one(ChatPanel)
+        plug_line = ""
+        if getattr(self.app, "plugins", None):
+            names = ", ".join(p.name for p in self.app.plugins)
+            plug_line = f"\n🔌 Plugin: {names}"
         await chat.add_info(
             f"⚡ Selamat datang di multacd v{self.app.version} — model: {self.app.cfg.model}\n"
-            f"📁 {self.app.project_label}\n"
+            f"📁 {self.app.project_label}{plug_line}\n"
             "Ketik pesan lalu Enter untuk kirim · Shift+Enter untuk newline · Ctrl+C keluar.\n"
             "Tool baca & git langsung jalan; tulis/shell/web minta izin [Y/N/A] dulu.\n"
             "Ketik /help buat daftar command · Ctrl+T file tree · Ctrl+G diff.\n"

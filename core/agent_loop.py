@@ -137,8 +137,13 @@ async def run_agent(
     ask_cb = ask_user or _stdin_ask
     defs = get_tool_definitions()
     # Bukan git repo → tool git disembunyikan dari LLM (lihat ModeManager).
-    tools = defs if active_tools is None else [
-        d for d in defs if d["function"]["name"] in set(active_tools)]
+    # Tool plugin selalu ikut (user-extension tersedia di semua mode).
+    if active_tools is None:
+        tools = defs
+    else:
+        from tools.registry import plugin_tool_names
+        allowed = set(active_tools) | set(plugin_tool_names())
+        tools = [d for d in defs if d["function"]["name"] in allowed]
 
     if not context.get_messages():
         context.add_message("system", _system_prompt())

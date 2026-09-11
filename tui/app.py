@@ -12,6 +12,7 @@ from core.codebase import get_git_summary, project_label, scan_project
 from core.config import Config, set_active_config
 from core.llm_client import LLMClient
 from core.mode_manager import ModeManager
+from core.plugin_loader import load_all
 from core.prompt_composer import PromptComposer, load_soul
 from memory.context import ConversationContext
 from tui import icons
@@ -48,6 +49,11 @@ class MultacdApp(App[None]):
         # objek yang sama dengan self.cfg, jadi mutasi /model ikut terlihat.
         set_active_config(self.cfg)
         self.version = version
+        # Plugin user (~/.multacd/plugins/) — load sekali saat startup.
+        # Gagal per-file di-skip + warning, tidak pernah crash app.
+        _plug = load_all()
+        self.plugins = _plug.plugins
+        self.plugin_warnings = _plug.warnings
         self.main_screen: MainScreen | None = None
         self._quit_armed = False
         # Mode + prompt composer (soul di-load sekali saat startup).

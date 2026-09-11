@@ -104,6 +104,13 @@ async def _serve(config: Any) -> None:
     from scheduler.engine import get_engine
 
     set_active_config(config)
+    from core.plugin_loader import load_all as _load_plugins
+    _plug = _load_plugins()
+    if _plug.plugins:
+        print(f"🔌 plugin: {', '.join(p.name for p in _plug.plugins)}",
+              flush=True)
+    for w in _plug.warnings:
+        print(f"⚠️ plugin: {w}", flush=True)
     engine = get_engine()
     loaded = engine.load_from_config(config)
     print(f"⏰ scheduler: {len(loaded['loaded'])} dari config, "
