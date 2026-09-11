@@ -10,9 +10,13 @@ import subprocess as _sp
 import threading
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 INSTALL_SH = ROOT / "scripts" / "install.sh"
 INSTALL_PS1 = ROOT / "scripts" / "install.ps1"
+
+needs_posix = pytest.mark.skipif(os.name == "nt", reason="butuh bash/unix")
 
 
 def _run(cmd: list[str], **kw) -> _sp.CompletedProcess:
@@ -34,6 +38,7 @@ def _source_detect(uname_s: str, uname_m: str, tmp_path: Path) -> str:
     return proc.stdout.strip()
 
 
+@needs_posix
 def test_detect_matrix(tmp_path: Path):
     assert _source_detect("Linux", "x86_64", tmp_path) == "linux-x86_64"
     assert _source_detect("Linux", "aarch64", tmp_path) == "linux-aarch64"
@@ -42,6 +47,7 @@ def test_detect_matrix(tmp_path: Path):
     assert _source_detect("FreeBSD", "x86_64", tmp_path) == "unsupported"
 
 
+@needs_posix
 def test_unsupported_suggests_pip(tmp_path: Path):
     bindir = tmp_path / "bin2"
     bindir.mkdir(exist_ok=True)
@@ -63,6 +69,7 @@ def _serve_dir(directory: Path):
     return server
 
 
+@needs_posix
 def test_local_install_happy_path(tmp_path: Path):
     """Alur penuh lawan server lokal + binary fake (cepat, tanpa 90MB)."""
     srv = tmp_path / "srv"

@@ -1,0 +1,106 @@
+# release.yml — tag v* → test → build binary → PyPI + GitHub Release.
+# Sengaja satu file (bukan test/build/release terpisah seperti sketsa awal):
+# `needs` antar-workflow tidak valid di GitHub Actions, jadi gating
+# test → build → publish diekspresikan sebagai job dalam workflow ini.
+# test.yml terpisah tetap ada buat CI tiap push/PR.
+#
+# Prasyarat manual sebelum Step 10: tambah secret PYPI_TOKEN
+# (https://pypi.org → API token) di repo settings.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/unit/ -v
+
+  build:
+    needs: [test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            output: multacd-linux-x86_64
+          - os: ubuntu-24.04-arm
+            output: multacd-linux-aarch64
+          - os: macos-latest
+            output: multacd-macos-arm64
+          - os: windows-latest
+            output: multacd-windows-x86_64.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyinstaller -e .
+      - run: pyinstaller multacd.spec --noconfirm
+      - run: mv dist/multacd* dist/${{ matrix.output }}
+        if: runner.os != 'Windows'
+      - run: Rename-Item dist/multacd.exe dist/${{ matrix.output }}
+        if: runner.os == 'Windows'
+        shell: pwsh
+      - run: dist/${{ matrix.output }} --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.output }}
+          path: dist/${{ matrix.output }}
+
+  publish:
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist_bin/
+      - run: pip install build twine
+      - run: python -m build --outdir dist_pkg/
+      - run: twine upload dist_pkg/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist_bin/**/*
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            Linux / macOS / Termux:
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/prototypeall850-creator/multacd/main/scripts/install.sh | bash
+            ```
+
+            Windows (PowerShell):
+
+            ```powershell
+            irm https://raw.githubusercontent.com/prototypeall850-creator/multacd/main/scripts/install.ps1 | iex
+            ```
+
+            Via pip:
+
+            ```bash
+            pip install multacd
+            ```

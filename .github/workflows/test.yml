@@ -1,0 +1,29 @@
+# test.yml — unit test tiap push/PR (Phase 5 Step 9).
+# Integration/self-test modul (tests/test_selftests.py) sengaja tidak ikut:
+# lambat (~1 mnt) dan butuh LLM key untuk sebagian flow — jalan lokal.
+
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/unit/ -v
