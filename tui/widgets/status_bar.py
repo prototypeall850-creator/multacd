@@ -8,6 +8,19 @@ from textual.widgets import Static
 from tui import icons
 
 
+def agent_status_for(status: object) -> str:
+    """Mapping murni AgentStatus → segmen status bar (R5, headless testable).
+
+    idle → "idle" · thinking/executing → "thinking" · nunggu → "waiting".
+    """
+    from core.session_state import AgentStatus as _S
+    if status in (_S.WAITING_PERMISSION, _S.WAITING_USER):
+        return "waiting"
+    if status in (_S.THINKING, _S.EXECUTING_TOOL):
+        return "thinking"
+    return "idle"
+
+
 class StatusBar(Static):
     """Contoh: multacd  ·  code  ·  groq/llama-3.3  ·  idle
     (glyph via tui.icons — ikut level nerdfonts/unicode/ascii)."""
@@ -32,6 +45,13 @@ class StatusBar(Static):
         """idle | thinking | waiting (nunggu konfirmasi user)."""
         self._status = status
         self._refresh()
+
+    def render_state(self, state) -> None:
+        """Status agent dari SessionState (R5) — screen tak set manual lagi.
+
+        `state` bertipe SessionState (tanpa annotation import biar ringan).
+        """
+        self.set_status(agent_status_for(state.status))
 
     def set_git(self, summary: dict) -> None:
         """Tampilkan branch + file berubah. Bukan repo → sembunyi (v2).
@@ -83,3 +103,14 @@ class StatusBar(Static):
         t.append(f"{dot} ", style=f"bold {dot_color}")
         t.append(self._status, style=dot_color)
         self.update(t)
+
+
+if __name__ == "__main__":
+    from core.session_state import AgentStatus as _S
+    assert agent_status_for(_S.IDLE) == "idle"
+    assert agent_status_for(_S.THINKING) == "thinking"
+    assert agent_status_for(_S.EXECUTING_TOOL) == "thinking"
+    assert agent_status_for(_S.WAITING_PERMISSION) == "waiting"
+    assert agent_status_for(_S.WAITING_USER) == "waiting"
+    assert StatusBar().render_compact().startswith("multacd")
+    print("✅ status_bar self-test OK (mapping + compact)")

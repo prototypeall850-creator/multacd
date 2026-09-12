@@ -59,6 +59,23 @@ def dotted(base: str, n_dots: int) -> str:
     return f"{base}{'.' * n_dots}"
 
 
+def render_base_for(status: object, current_tool: str | None) -> str:
+    """Mapping murni SessionState → base label (R5, headless testable).
+
+    IDLE → "" · THINKING/WAITING_USER → "thinking"
+    WAITING_PERMISSION → "waiting for approval"
+    EXECUTING_TOOL → label tool (atau "thinking" kalau tak diketahui).
+    """
+    from core.session_state import AgentStatus as _S
+    if status is _S.EXECUTING_TOOL:
+        return base_label(current_tool or "thinking")
+    if status is _S.WAITING_PERMISSION:
+        return base_label("waiting")
+    if status in (_S.THINKING, _S.WAITING_USER):
+        return base_label("thinking")
+    return ""
+
+
 class ThinkingBar(Static):
     """Baris status animasi. show()/hide() dipanggil sync dari MainScreen."""
 
@@ -78,6 +95,15 @@ class ThinkingBar(Static):
 
     def hide(self) -> None:
         self._base = ""
+        self._paint()
+
+    def render_state(self, state) -> None:
+        """Render dari SessionState (R5) — screen tak lagi show()/hide() manual.
+
+        `state` bertipe SessionState (tanpa annotation import biar ringan).
+        """
+        self._base = render_base_for(state.status, state.current_tool)
+        self._dots = 1
         self._paint()
 
     @property
@@ -113,6 +139,23 @@ if __name__ == "__main__":
     assert dotted("thinking", 1) == "thinking."
     assert dotted("thinking...", 7).count(".") == 7
     assert dotted("", 5) == ""
+    # R5: mapping SessionState → label (pure, tanpa mount widget).
+    from core.session_state import AgentStatus as _S
+    assert render_base_for(_S.IDLE, None) == ""
+    assert render_base_for(_S.THINKING, None) == "thinking"
+    assert render_base_for(_S.WAITING_USER, None) == "thinking"
+    assert render_base_for(_S.WAITING_PERMISSION, None) == "waiting for approval"
+    assert render_base_for(_S.EXECUTING_TOOL, "bash") == "running bash..."
+    assert render_base_for(_S.EXECUTING_TOOL, "web_search") == "searching..."
+    assert render_base_for(_S.EXECUTING_TOOL, None) == "thinking"
+    # render_state jalan tanpa mount (_paint di-suppress) — _base benar.
+    bar = ThinkingBar.__new__(ThinkingBar)
+    bar._base = ""
+    bar._dots = 1
+    from core.session_state import SessionState as _SS
+    st = _SS(status=_S.EXECUTING_TOOL, current_tool="bash")
+    bar.render_state(st)
+    assert bar._base == "running bash...", bar._base
     # Siklus tick 1..7 lalu balik 1
     seq = []
     d = 1
