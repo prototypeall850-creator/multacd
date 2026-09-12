@@ -714,6 +714,8 @@ class MainScreen(Screen):
             inbar.set_busy(True)
             bar.render_state(self.session)
             think.render_state(self.session)
+            # §10: turn pertama = splash bubar, masuk layout normal.
+            await chat.dismiss_splash()
             # /clear: bersihkan UI dulu biar command + respons tetap kelihatan.
             # (Single source of truth parsing tetap ModeManager di agent_loop.)
             stripped = text.strip().lower()

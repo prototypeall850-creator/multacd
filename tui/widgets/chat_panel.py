@@ -37,6 +37,10 @@ class ChatPanel(VerticalScroll):
         text-align: right;
         color: $text-muted;
     }
+    ChatPanel .splash-ver {
+        text-align: right;
+        color: $text-muted;
+    }
     ChatPanel .live-out {
         color: $text-muted;
         padding: 0 1;
@@ -46,33 +50,66 @@ class ChatPanel(VerticalScroll):
 
     SPLASH_QUOTE = '"Perbaiki tests rusak"'
 
+    # Tips bergantian (§10: bullet peach). Isi = binding betulan, bukan janji.
+    SPLASH_TIPS = (
+        "Ketik /connect untuk setup provider",
+        "Ketik / lalu pilih command · ctrl+o ganti model",
+        "Ctrl+t file tree · ctrl+g diff · ctrl+r sumber research",
+    )
+
+    @staticmethod
+    def pick_tip(rng=None) -> str:
+        """Satu tip acak (R7). rng di-inject biar test deterministik."""
+        import random as _random
+        return (rng or _random).choice(ChatPanel.SPLASH_TIPS)
+
     async def show_splash(self, version: str, model: str, mode: str = "code") -> None:
-        """Splash ala cover (logo + panel prompt + meta + hints). Sekali saat startup."""
+        """Splash §10 (logo spaced + panel prompt + tip + versi). Sekali saat startup."""
+        from tui import icons as _icons
         short = model.split("/")[-1][:28] or "?"
         try:
             from core.providers import provider_id_of
             prov = provider_id_of(model) or "custom"
         except Exception:
             prov = "custom"
-        logo = Text()
-        logo.append("multa", style="dim")
-        logo.append("cd", style="bold")
-        await self.mount(Static(logo, classes="splash-logo"))
+        logo = Text("m u l t a c d", style="bold #b4befe")  # lavender §10
         body = Text()
         body.append("Tanya apapun... ", style="")
         body.append(self.SPLASH_QUOTE, style="dim")
         body.append("\n")
         body.append(mode, style="blue")
-        body.append(f"  ·  {short}  ·  {prov}  ·  v{version}", style="dim")
-        await self.mount(Static(
-            Panel(body, border_style="blue", padding=(1, 2))))
+        body.append(f"  ·  {short}  ·  {prov}", style="dim")
         hints = Text()
         hints.append("/ ", style="")
         hints.append("commands  ", style="dim")
         hints.append("ctrl+o ", style="")
         hints.append("models", style="dim")
-        await self.mount(Static(hints, classes="splash-hints"))
+        tip = Text()
+        tip.append(f"{_icons.icon('bullet')}  Tip  ", style="#fab387")  # peach §10
+        tip.append(self.pick_tip(), style="dim")
+        ver = Text(f"v{version}", style="dim")
+        widgets = [
+            Static(logo, classes="splash-logo"),
+            Static(Panel(body, border_style="blue", padding=(1, 2))),
+            Static(hints, classes="splash-hints"),
+            Static(tip),
+            Static(ver, classes="splash-ver"),
+        ]
+        for w in widgets:
+            await self.mount(w)
+        self._splash = widgets
         self.scroll_end(animate=False)
+
+    async def dismiss_splash(self) -> None:
+        """Hapus splash saat user mulai turn pertama (§10: transisi ke layout normal).
+
+        Info welcome (plugin/project) bukan splash — tetap tampil.
+        """
+        for w in getattr(self, "_splash", []):
+            with suppress(Exception):
+                if w.parent is not None:
+                    await w.remove()
+        self._splash = []
 
     def __init__(self) -> None:
         super().__init__(id="chat-panel")
@@ -81,6 +118,7 @@ class ChatPanel(VerticalScroll):
         self._assistant_history: list[str] = []  # jawaban selesai (buat /copy)
         self._tool_rows: dict[str, ToolActivity] = {}
         self._live: dict[str, tuple[Static, list[str]]] = {}
+        self._splash: list = []  # widget splash §10 (dismiss saat turn pertama)
 
     async def add_user(self, text: str) -> None:
         # Panel body dibungkus Text: user bisa ketik `[...]` seenaknya
@@ -190,6 +228,7 @@ class ChatPanel(VerticalScroll):
         """Kosongkan semua bubble (dipakai /clear) + reset state streaming."""
         for child in list(self.children):
             await child.remove()
+        self._splash = []
         self._assistant_md = None
         self._assistant_text = ""
         self._assistant_history.clear()
