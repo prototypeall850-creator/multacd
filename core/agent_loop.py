@@ -22,9 +22,18 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from core.agent_events import (
+    AgentContinue,
+    AgentDone,
+    AgentError,
+    AgentEvent,
+    AgentText,
+    AgentToolDone,
+    AgentToolStart,
+    AgentUsage,
+)
 from core.config import Config
 from core.llm_client import LLMClient, LLMError, StreamDone, StreamText, setup_client
 from core.permissions import PermissionChecker
@@ -54,57 +63,19 @@ AskCallback = Callable[[str], Awaitable[str]]
 OutputCallback = Callable[[str, str], None]
 
 
-@dataclass
-class AgentText:
-    delta: str
-
-
-@dataclass
-class AgentToolStart:
-    call_id: str
-    name: str
-    params: dict[str, Any]
-
-
-@dataclass
-class AgentToolDone:
-    call_id: str
-    name: str
-    success: bool
-    result: dict[str, Any] | None = None  # payload penuh (D4: expandable view)
-
-
-@dataclass
-class AgentDone:
-    text: str
-
-
-@dataclass
-class AgentUsage:
-    """Token resmi provider untuk satu panggilan LLM (0 = tak dilapor)."""
-
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    cost_usd: float = 0.0  # estimasi lokal (tabel harga provider)
-
-
-@dataclass
-class AgentContinue:
-    """LLM minta lanjut padahal batas iterasi tercapai.
-
-    Bukan error — TUI tampilkan ringkasan + tombol Lanjut/Berhenti.
-    CLI fallback: auto-lanjut kalau stdin bukan TTY? tidak — default berhenti.
-    Lihat run_agent(continue_on_limit) + main_screen._run_turn.
-    """
-
-    tool_count: int
-    limit: int
-    summary: str  # ringkasan tool terakhir biar user bisa nilai
-
-
-@dataclass
-class AgentError:
-    message: str
+# Re-export biar import lama (`from core.agent_loop import AgentText, ...`)
+# tetap jalan selama migrasi (R2: tanpa ubah behavior).
+__all__ = [
+    "AgentContinue",
+    "AgentDone",
+    "AgentError",
+    "AgentEvent",
+    "AgentText",
+    "AgentToolDone",
+    "AgentToolStart",
+    "AgentUsage",
+    "run_agent",
+]
 
 
 def _stuck_error(tool_name: str) -> AgentError:
@@ -114,9 +85,6 @@ def _stuck_error(tool_name: str) -> AgentError:
         "kemungkinan stuck. Coba pecah tugas jadi langkah kecil "
         "atau kasih instruksi lebih spesifik."
     )
-
-
-AgentEvent = AgentText | AgentToolStart | AgentToolDone | AgentDone | AgentUsage | AgentContinue | AgentError
 
 
 async def _stdin_confirm(tool_name: str, params: dict[str, Any]) -> str:
