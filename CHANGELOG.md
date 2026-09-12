@@ -2,6 +2,15 @@
 
 Format: Keep a Changelog. Versi: Semantic Versioning.
 
+## [2.0.0b8] - 2026-09-13
+
+Beta v2 kedelapan (refactor arsitektur, tanpa ubah fitur): kontrak event
+`core/agent_events` (R2), SessionState + reducer keluar widget (R3),
+AgentController + fix approve [A] lintas turn (#32, R4), widget render
+dari state (R5), research sink task-scoped (R6), splash §10 lengkap (R7).
+
+Install: `pip install "multacd==2.0.0b8"` (tanpa --pre).
+
 ## [2.0.0b7] - 2026-09-12
 
 Beta v2 ketujuh (borongan): config key kosong dimaafkan (#27), limit jadi
