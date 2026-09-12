@@ -171,7 +171,7 @@ class MainScreen(Screen):
         bar.set_model(self.app.cfg.model)
         bar.set_mode(self.app.mode_manager.get_mode())
         bar.set_git(self.app.git_summary)
-        bar.set_status("idle")
+        bar.render_state(self.session)  # IDLE awal — dari state, konsisten R5
         self.query_one(InputBar).focus()
         self.run_worker(self._show_welcome())
         self.run_worker(self._git_watcher())
@@ -712,8 +712,8 @@ class MainScreen(Screen):
         think = self.query_one(ThinkingBar)
         try:
             inbar.set_busy(True)
-            bar.set_status("thinking")
-            think.show("thinking")
+            bar.render_state(self.session)
+            think.render_state(self.session)
             # /clear: bersihkan UI dulu biar command + respons tetap kelihatan.
             # (Single source of truth parsing tetap ModeManager di agent_loop.)
             stripped = text.strip().lower()
@@ -726,11 +726,11 @@ class MainScreen(Screen):
                 if isinstance(event, AgentText):
                     await chat.append_assistant_text(event.delta)
                 elif isinstance(event, AgentToolStart):
-                    think.show(event.name)
+                    think.render_state(self.session)
                     await chat.add_tool_row(event.call_id, event.name,
                                             event.params)
                 elif isinstance(event, AgentToolDone):
-                    think.show("thinking")
+                    think.render_state(self.session)
                     await chat.drop_live_output(event.call_id)
                     await chat.update_tool_row(event.call_id, event.name,
                                                event.success, event.result)
@@ -765,12 +765,12 @@ class MainScreen(Screen):
                 active_tools=self.app.mode_manager.get_active_tools(),
             )
         finally:
-            think.hide()
+            self.session.end_turn()
+            think.render_state(self.session)
+            bar.render_state(self.session)
             self._sync_mode_ui()
-            bar.set_status("idle")
             inbar.set_busy(False)
             inbar.focus()
-            self.session.end_turn()
 
     def _apply_research_event(self, ev: dict[str, Any]) -> None:
         """Terapkan satu event orchestrator ke SourcesPanel (jalan di app loop)."""
@@ -806,9 +806,9 @@ class MainScreen(Screen):
         bar = self.query_one(StatusBar)
         think = self.query_one(ThinkingBar)
         perm = self.query_one(PermissionPopup)
-        bar.set_status("waiting")
-        think.hide()  # permission bar gantikan thinking bar sementara
         self.session.status = AgentStatus.WAITING_PERMISSION
+        bar.render_state(self.session)
+        think.render_state(self.session)
         try:
             # #4: preview diff otomatis sebelum approve commit.
             if tool_name == "git_commit":
@@ -826,9 +826,11 @@ class MainScreen(Screen):
                 return f"edit:{new_msg}"
             return ans
         finally:
-            self.session.status = AgentStatus.EXECUTING_TOOL
-            bar.set_status("thinking")
-            think.show("thinking")
+            # Balik THINKING (bukan EXECUTING): visual sama kayak dulu
+            # ("thinking", bukan "running X") sampai event berikutnya.
+            self.session.status = AgentStatus.THINKING
+            bar.render_state(self.session)
+            think.render_state(self.session)
 
     async def _ask_user(self, question: str) -> str:
         return await self.app.push_screen(AskDialog(question), wait_for_dismiss=True)
