@@ -416,6 +416,25 @@ class MainScreen(Screen):
                     n = 1
             self.copy_assistant(n)
             return
+        # /connect [provider] → sambung provider (dialog key/base, TUI-local).
+        if parts and parts[0].lower() == "/connect":
+            self._turn_running = True
+            self.run_worker(self._connect_flow(
+                parts[1] if len(parts) > 1 else ""))
+            return
+        # /models [provider] → selector model provider itu (TUI-local).
+        if parts and parts[0].lower() == "/models":
+            arg = parts[1] if len(parts) > 1 else ""
+            if arg:
+                from tui.widgets.model_selector import for_provider
+                if for_provider(arg, self.app.cfg.model) is None:
+                    self._turn_running = True
+                    self.run_worker(self._connect_note(
+                        f"Provider `{arg}` tak dikenal. /connect tanpa arg "
+                        "buat daftar."))
+                    return
+            self.model_open(provider=arg or None)
+            return
         self._turn_running = True
         self.run_worker(self._run_turn(text))
 
@@ -452,10 +471,11 @@ class MainScreen(Screen):
         """Ctrl+O: buka model selector (DESIGN §12)."""
         self.model_open()
 
-    def model_open(self) -> None:
+    def model_open(self, provider: str | None = None) -> None:
         """Buka selector; tutup palette kalau sedang terbuka."""
         self.query_one(SlashPalette).close()
-        self.query_one(ModelSelector).open(self.app.cfg.model)
+        self.query_one(ModelSelector).open(self.app.cfg.model,
+                                           provider=provider)
         self.query_one(InputBar).focus()
 
     def model_select(self) -> None:
@@ -465,11 +485,12 @@ class MainScreen(Screen):
         name = sel.selected
         if name:
             sel.mark_used(name)
+        full = sel.selected_qualified
         sel.close()
         inbar.clear()
         inbar.focus()
-        if name:
-            self._submit(f"/model {name}")
+        if full:
+            self._submit(f"/model {full}")
 
     def model_favorite(self) -> None:
         """Ctrl+F di selector: tandai favorit."""
@@ -535,6 +556,132 @@ class MainScreen(Screen):
         except Exception:
             return
         self.run_worker(chat.add_live_output(call_id, line))
+
+    async def _connect_note(self, text: str) -> None:
+        """Info TUI-local + reset flag submit (dipakai /models tak dikenal)."""
+        try:
+            await self.query_one(ChatPanel).add_info(text)
+        finally:
+            with suppress(Exception):
+                self.query_one(InputBar).focus()
+            self._turn_running = False
+
+    async def _connect_flow(self, arg: str) -> None:
+        """Sambung provider via dialog (TUI-local, tanpa LLM).
+
+        `/connect` = daftar + status; `/connect <id>` = pasang key
+        (+ base bila perlu) lalu simpan. LLM dan search satu pintu.
+        """
+        from core.config import save_config_updates
+        from core.providers import provider_id_of
+        from tui.screens.setup_wizard import PROVIDERS, SEARCH_OPTIONS
+        from tui.widgets.confirm_dialog import AskDialog
+        chat = self.query_one(ChatPanel)
+        inbar = self.query_one(InputBar)
+        cfg = self.app.cfg
+        try:
+            await chat.add_user(f"/connect {arg}".strip())
+            llm_ids = [p.id for p in PROVIDERS]
+            search_ids = [sid for sid, _ in SEARCH_OPTIONS
+                          if sid != "skip"]
+            if not arg.strip():
+                cur = provider_id_of(cfg.model)
+                lines = ["Provider LLM:"]
+                for p in PROVIDERS:
+                    if p.id in cfg.provider_keys:
+                        st = "connected"
+                    elif p.id == cur and cfg.api_key:
+                        st = "connected (top-level)"
+                    else:
+                        st = "belum"
+                    lines.append(f"  {p.id} — {st}")
+                lines.append("Provider search:")
+                for sid, desc in SEARCH_OPTIONS:
+                    if sid == "skip":
+                        continue
+                    mark = "aktif" if cfg.search_provider == sid else "—"
+                    lines.append(f"  {sid} — {mark} ({desc})")
+                lines.append("Pakai: /connect <id> · /models <id>")
+                await chat.add_info("\n".join(lines))
+                return
+            pid = arg.strip().lower()
+            if pid in llm_ids:
+                label = next(p.label for p in PROVIDERS if p.id == pid)
+                key = await self.app.push_screen(
+                    AskDialog(f"API key {label} (Esc = batal):",
+                              password=True),
+                    wait_for_dismiss=True)
+                if not key or key == "(dibatalkan)":
+                    await chat.add_info("Dibatalkan — key tidak diubah.")
+                    return
+                updates: dict[str, Any] = {"provider_keys": {pid: key}}
+                cfg.provider_keys[pid] = key
+                if pid in ("custom", "ollama"):
+                    default = next(p.default_base for p in PROVIDERS
+                                   if p.id == pid)
+                    cur_base = cfg.provider_bases.get(pid, "")
+                    base = await self.app.push_screen(
+                        AskDialog(
+                            f"Endpoint {label} (kosongkan = bawaan"
+                            + (f" {cur_base or default}" if (cur_base or default) else "")
+                            + ", - = hapus):",
+                            initial=cur_base or default),
+                        wait_for_dismiss=True)
+                    if base is None or base == "(dibatalkan)":
+                        await chat.add_info("Dibatalkan — base tidak diubah.")
+                        return
+                    base = base.strip()
+                    if base == "-":
+                        cfg.provider_bases.pop(pid, None)
+                        updates["provider_bases"] = {pid: ""}
+                    elif base:
+                        cfg.provider_bases[pid] = base.rstrip("/")
+                        updates["provider_bases"] = {
+                            pid: base.rstrip("/")}
+                try:
+                    save_config_updates(updates)
+                    saved = " (tersimpan)"
+                except OSError as e:
+                    saved = f" (gagal simpan: {e} — sesi ini saja)"
+                await chat.add_info(
+                    f"`{pid}` connected{saved}. Ganti model: /models {pid}")
+                return
+            if pid in search_ids:
+                if pid == "duckduckgo":
+                    cfg.search_provider = "duckduckgo"
+                    try:
+                        save_config_updates({"search_provider": "duckduckgo"})
+                        saved = " (tersimpan)"
+                    except OSError as e:
+                        saved = f" (gagal simpan: {e})"
+                    await chat.add_info(
+                        f"Search → duckduckgo (gratis){saved}.")
+                    return
+                key = await self.app.push_screen(
+                    AskDialog(f"Search key {pid} (Esc = batal):",
+                              password=True),
+                    wait_for_dismiss=True)
+                if not key or key == "(dibatalkan)":
+                    await chat.add_info("Dibatalkan — key tidak diubah.")
+                    return
+                cfg.search_provider = pid
+                cfg.search_api_key = key
+                try:
+                    save_config_updates({"search_provider": pid,
+                                         "search_api_key": key})
+                    saved = " (tersimpan)"
+                except OSError as e:
+                    saved = f" (gagal simpan: {e} — sesi ini saja)"
+                await chat.add_info(
+                    f"Search → {pid}{saved}. Coba: /research lalu tanya.")
+                return
+            await chat.add_info(
+                f"Provider `{pid}` tak dikenal. /connect tanpa arg buat daftar.")
+        finally:
+            self._sync_mode_ui()
+            with suppress(Exception):
+                inbar.focus()
+            self._turn_running = False
 
     async def _run_turn(self, text: str) -> None:
         chat = self.query_one(ChatPanel)

@@ -28,13 +28,13 @@ class ChatPanel(VerticalScroll):
         margin: 1 0;
         height: auto;
     }
-    ChatPanel .splash-title {
+    ChatPanel .splash-logo {
         text-align: center;
-        color: $primary;
-        padding: 1 0 0 0;
+        color: $text;
+        padding: 2 0 1 0;
     }
-    ChatPanel .splash-hint {
-        text-align: center;
+    ChatPanel .splash-hints {
+        text-align: right;
         color: $text-muted;
     }
     ChatPanel .live-out {
@@ -44,22 +44,34 @@ class ChatPanel(VerticalScroll):
     }
     """
 
-    SPLASH_TIPS = (
-        "Ketik / lalu pilih command · /model ganti model · /help semua command",
-        "Tool baca & git langsung jalan; tulis/shell/web minta izin dulu",
-        "Ctrl+T file tree · Ctrl+G diff · Ctrl+R sumber (mode /research)",
-    )
+    SPLASH_QUOTE = '"Perbaiki tests rusak"'
 
     async def show_splash(self, version: str, model: str, mode: str = "code") -> None:
-        """Splash v2 (DESIGN §10): logo + model + 1 tip. Sekali saat startup."""
-        from tui import icons as _icons
-        tip = self.SPLASH_TIPS[0]
-        await self.mount(Static(f"[bold]{_icons.icon('app')}  m u l t a c d[/bold]",
-                                classes="splash-title"))
-        await self.mount(Static(f"{escape(mode)} · {escape(model)} · v{version}",
-                                classes="splash-hint"))
-        await self.mount(Static(f"{_icons.icon('bullet')}  Tip  {tip}",
-                                classes="splash-hint"))
+        """Splash ala cover (logo + panel prompt + meta + hints). Sekali saat startup."""
+        short = model.split("/")[-1][:28] or "?"
+        try:
+            from core.providers import provider_id_of
+            prov = provider_id_of(model) or "custom"
+        except Exception:
+            prov = "custom"
+        logo = Text()
+        logo.append("multa", style="dim")
+        logo.append("cd", style="bold")
+        await self.mount(Static(logo, classes="splash-logo"))
+        body = Text()
+        body.append("Tanya apapun... ", style="")
+        body.append(self.SPLASH_QUOTE, style="dim")
+        body.append("\n")
+        body.append(mode, style="blue")
+        body.append(f"  ·  {short}  ·  {prov}  ·  v{version}", style="dim")
+        await self.mount(Static(
+            Panel(body, border_style="blue", padding=(1, 2))))
+        hints = Text()
+        hints.append("/ ", style="")
+        hints.append("commands  ", style="dim")
+        hints.append("ctrl+o ", style="")
+        hints.append("models", style="dim")
+        await self.mount(Static(hints, classes="splash-hints"))
         self.scroll_end(animate=False)
 
     def __init__(self) -> None:

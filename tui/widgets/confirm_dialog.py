@@ -35,17 +35,19 @@ class AskDialog(ModalScreen[str]):
     }
     """
 
-    def __init__(self, question: str, initial: str = "") -> None:
+    def __init__(self, question: str, initial: str = "",
+                 password: bool = False) -> None:
         super().__init__()
         self.question = question
         self.initial = initial
+        self.password = password
 
     def compose(self) -> ComposeResult:
         from tui import icons as _icons
         with Container():
             yield Static(f"{_icons.icon('arrow')} {escape(self.question)}")
             yield Input(placeholder="ketik jawaban lalu Enter", id="ask-input",
-                        value=self.initial)
+                        value=self.initial, password=self.password)
 
     def on_mount(self) -> None:
         self.query_one("#ask-input", Input).focus()

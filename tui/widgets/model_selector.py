@@ -93,6 +93,44 @@ def all_models() -> list[tuple[str, str, str]]:
     return out
 
 
+def for_provider(arg: str, config_model: str = "") -> list | None:
+    """Pool model satu provider ('openai', 'groq', ...). None = tak dikenal.
+
+    Dipakai `/models <provider>` — ganti model di dalam provider itu.
+    Baris Current selalu ikut biar model aktif tak hilang.
+    """
+    key = (arg or "").strip().lower()
+    if not key:
+        return None
+    cat = None
+    for name, prefixes in PROVIDER_PREFIX.items():
+        ids = {name.lower()}
+        ids.update(p.rstrip("/-") for p in prefixes)
+        if key in ids:
+            cat = name
+            break
+    if cat is None:
+        return None
+    pool = [m for m in all_models() if m[0] == cat]
+    cur = (config_model or "").strip()
+    if cur and all(m[1] != cur for m in pool):
+        pool.insert(0, ("Current", cur, ""))
+    return pool
+
+
+def qualified(provider: str, name: str) -> str:
+    """'Groq' + 'llama-3.3' → 'groq/llama-3.3' (routing butuh prefix).
+
+    Nama 'Current'/sudah prefix → apa adanya. Tanpa ini, model non
+    OpenAI/Anthropic/Gemini (groq/ollama/...) tak ke-route provider.
+    """
+    if provider == "Current" or "/" in name:
+        return name
+    prefixes = PROVIDER_PREFIX.get(provider, ())
+    pre = next((p for p in prefixes if p.endswith("/")), "")
+    return f"{pre}{name}" if pre else name
+
+
 def for_configured(config_model: str) -> list[tuple[str, str, str]]:
     """Filter katalog ke provider yang sedang dikonfigurasi + ollama (lokal).
 
@@ -170,8 +208,26 @@ class ModelSelector(Vertical):
         row = self._rows[self._index]
         return row[2] if row[0] == "item" else None
 
-    def open(self, config_model: str = "") -> None:
-        self._pool = for_configured(config_model)
+    @property
+    def selected_qualified(self) -> str | None:
+        """Nama siap routing ('groq/llama-...'). Dipakai submit /model."""
+        if not self._rows or self._index >= len(self._rows):
+            return None
+        row = self._rows[self._index]
+        if row[0] != "item":
+            return None
+        return qualified(row[1], row[2])
+
+    def open(self, config_model: str = "",
+             provider: str | None = None) -> None:
+        """Buka selector. provider = filter `/models <prov>` (None = configured)."""
+        if provider:
+            pool = for_provider(provider, config_model)
+            if pool is None:
+                pool = for_configured(config_model)
+            self._pool = pool
+        else:
+            self._pool = for_configured(config_model)
         # Urut: favorit → recent → sisanya (dalam pool order).
         fav = [m for m in self._pool if m[1] in self._favorites]
         rec = [m for m in self._pool
@@ -335,4 +391,15 @@ if __name__ == "__main__":
     assert sel.selected == "b", sel.selected
     sel._layout_rows([("Groq", "a", "")], grouped=False)
     assert [r[0] for r in sel._rows] == ["item"] and sel.selected == "a"
-    print("✅ model_selector self-test OK (katalog + fuzzy + grouping)")
+    # /models <prov>: pool satu provider + Current; qualified siap routing.
+    pool = for_provider("groq", "openai/gpt-4o")
+    assert pool is not None and {p for p, _, _ in pool} == {"Groq", "Current"}
+    assert for_provider("ngawur") is None and for_provider("") is None
+    assert for_provider("claude") is not None  # alias nama model
+    assert qualified("Groq", "llama-3.3-70b-versatile") == "groq/llama-3.3-70b-versatile"
+    assert qualified("OpenAI", "gpt-4o") == "openai/gpt-4o"
+    assert qualified("Current", "custom/x") == "custom/x"
+    sel._layout_rows([("Groq", "llama-3.3-70b-versatile", "Free")],
+                     grouped=False)
+    assert sel.selected_qualified == "groq/llama-3.3-70b-versatile"
+    print("✅ model_selector self-test OK (katalog + fuzzy + grouping + prov)")

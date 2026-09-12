@@ -36,6 +36,8 @@ HELP_TEXT = (
     "  /clear         → bersihkan history, mulai sesi baru\n"
     "  /scan          → scan ulang codebase project\n"
     "  /model [nama]  → lihat / ganti model (cth: /model openai/gpt-4o)\n"
+    "  /models [prov] → jelajahi model satu provider\n"
+    "  /connect [prov]→ sambung provider (pasang key via dialog)\n"
     "  /key [KEY]     → lihat / pasang API key provider aktif\n"
     "  /base [URL]    → lihat / pasang endpoint provider aktif\n"
     "  /soul          → tampilkan kepribadian agent yang aktif\n"
@@ -50,6 +52,8 @@ PALETTE_COMMANDS: tuple[tuple[str, str], ...] = (
     ("/clear", "Clear conversation history"),
     ("/scan", "Re-scan codebase"),
     ("/model", "Switch LLM model"),
+    ("/models", "Browse provider models"),
+    ("/connect", "Connect a provider"),
     ("/key", "Set provider API key"),
     ("/base", "Set provider endpoint"),
     ("/soul", "Show active soul.md"),
@@ -57,7 +61,7 @@ PALETTE_COMMANDS: tuple[tuple[str, str], ...] = (
 )
 
 # Command yang butuh argumen lanjutan → Enter = autocomplete, bukan submit.
-COMMANDS_WITH_ARGS = frozenset({"/model", "/key", "/base"})
+COMMANDS_WITH_ARGS = frozenset({"/model", "/models", "/connect", "/key", "/base"})
 
 MODE_PROMPTS = {
     MODE_CODE: (
@@ -263,6 +267,14 @@ class ModeManager:
             return self._handle_key(arg)
         if cmd == "/base":
             return self._handle_base(arg)
+        if cmd == "/connect":
+            return CommandResult(
+                True, "`/connect` butuh dialog TUI — jalan di aplikasi, "
+                "bukan mode headless.", None)
+        if cmd == "/models":
+            return CommandResult(
+                True, "`/models` buka popup di TUI (atau Ctrl+O). "
+                "Headless: `/model provider/nama` langsung.", None)
         if cmd == "/help":
             return CommandResult(True, HELP_TEXT, None)
         if cmd == "/soul":
@@ -463,6 +475,11 @@ if __name__ == "__main__":
     # 7. Unknown command + "/" kosong tidak crash
     assert "tidak dikenal" in mm.handle_command("/ngawur").message
     assert "tidak dikenal" in mm.handle_command("/").message
+    # /connect + /models butuh TUI — headless dapat pesan jujur.
+    assert "TUI" in mm.handle_command("/connect").message
+    assert "Ctrl+O" in mm.handle_command("/models").message
+    assert "/connect" in mm.handle_command("/help").message
+    assert "/models" in mm.handle_command("/help").message
 
     # 8. Tanpa config: /model X ditolak dengan sopan
     mm2 = ModeManager()
