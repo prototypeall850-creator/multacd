@@ -81,6 +81,18 @@ class ConversationContext:
             ],
         })
 
+    def set_system(self, content: str) -> None:
+        """Ganti system message dengan prompt terbaru (issue #26).
+
+        Ganti mode (/code→/research) cuma update composer — history
+        masih bawa system lama kalau tidak di-refresh. Panggil tiap
+        turn sebelum kirim ke LLM (lihat core/agent_loop.py).
+        """
+        if self._messages and self._messages[0].get("role") == "system":
+            self._messages[0] = {"role": "system", "content": content}
+        else:
+            self._messages.insert(0, {"role": "system", "content": content})
+
     def get_messages(self) -> list[dict[str, Any]]:
         """Return semua messages (copy list — jangan mutasi hasilnya)."""
         return list(self._messages)

@@ -174,6 +174,11 @@ async def run_agent(
 
     if not context.get_messages():
         context.add_message("system", _system_prompt())
+    elif composer is not None:
+        # #26: mode ganti → composer baru, tapi history masih bawa
+        # system lama. Refresh tiap turn (ala opencode: system disusun
+        # ulang tiap request) biar LLM baca persona yang benar.
+        context.set_system(_system_prompt())
     context.add_message("user", user_input)
 
     iteration = 0

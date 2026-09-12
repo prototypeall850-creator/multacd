@@ -13,6 +13,7 @@ import asyncio
 
 from core.agent_loop import AgentDone, AgentError, run_agent
 from core.llm_client import StreamDone, ToolCallRequest
+from core.prompt_composer import PromptComposer
 from memory.context import ConversationContext
 
 
@@ -53,6 +54,24 @@ def test_single_auto_tool_runs(sample_config, fake_llm_factory, tmp_path):
     assert isinstance(events[-1], AgentDone)
     blob = " ".join(str(m.get("content", "")) for m in ctx.get_messages())
     assert "a.txt" in blob or "a.txt" in events[-1].text
+
+
+def test_mode_switch_refreshes_system_prompt(sample_config, fake_llm_factory):
+    # #26: ganti mode harus ganti system yang dilihat LLM berikutnya.
+    composer = PromptComposer(soul="S")
+    composer.update_mode("MODE-A")
+    ctx = ConversationContext()
+    fake = fake_llm_factory([StreamDone("a", [])])
+    _run(_drain(run_agent("hi", ctx, sample_config, llm_client=fake,
+                          composer=composer)))
+    assert "MODE-A" in ctx.get_messages()[0]["content"]
+    composer.update_mode("MODE-B")
+    fake = fake_llm_factory([StreamDone("b", [])])
+    _run(_drain(run_agent("halo lagi", ctx, sample_config, llm_client=fake,
+                          composer=composer)))
+    sys_msgs = [m for m in ctx.get_messages() if m["role"] == "system"]
+    assert len(sys_msgs) == 1 and "MODE-B" in sys_msgs[0]["content"], sys_msgs
+    assert "MODE-B" in fake.seen[-1][0]["content"]
 
 
 def test_max_iterations_stops_gracefully(sample_config, fake_llm_factory):
