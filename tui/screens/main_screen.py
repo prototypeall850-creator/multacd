@@ -13,6 +13,7 @@ from textual.screen import Screen
 from textual.widgets import TextArea
 
 from core.agent_loop import (
+    AgentContinue,
     AgentDone,
     AgentError,
     AgentText,
@@ -24,7 +25,7 @@ from core.agent_loop import (
 from core.codebase import get_git_summary
 from core.research.bus import set_research_sink
 from tui.widgets.chat_panel import ChatPanel
-from tui.widgets.confirm_dialog import AskDialog
+from tui.widgets.confirm_dialog import AskDialog, ContinueDialog
 from tui.widgets.diff_viewer import DiffViewer
 from tui.widgets.file_tree import FileOpenRequested, ProjectTree, modified_files
 from tui.widgets.info_panel import InfoPanel, estimate_tokens
@@ -556,37 +557,62 @@ class MainScreen(Screen):
             set_research_sink(
                 lambda ev: self.app.call_from_thread(
                     self._apply_research_event, ev))
-            async for event in run_agent(
-                text,
-                self.app.context,
-                self.app.cfg,
-                llm_client=self.app.llm_client,
-                confirm=self._confirm,
-                ask_user=self._ask_user,
-                mode_manager=self.app.mode_manager,
-                active_tools=self.app.mode_manager.get_active_tools(),
-                composer=self.app.composer,
-                output_cb=self._live_sink,
-            ):
-                if isinstance(event, AgentText):
-                    await chat.append_assistant_text(event.delta)
-                elif isinstance(event, AgentToolStart):
-                    think.show(event.name)
-                    await chat.add_tool_row(event.call_id, event.name, event.params)
-                elif isinstance(event, AgentToolDone):
-                    think.show("thinking")
-                    self._tools_run += 1
-                    await chat.drop_live_output(event.call_id)
-                    await chat.update_tool_row(event.call_id, event.name,
-                                               event.success, event.result)
-                elif isinstance(event, AgentDone):
-                    pass  # teks sudah ter-stream penuh
-                elif isinstance(event, AgentUsage):
-                    self._sess_prompt += event.prompt_tokens
-                    self._sess_completion += event.completion_tokens
-                    self._sess_cost += event.cost_usd
-                elif isinstance(event, AgentError):
-                    await chat.add_error(event.message)
+            # Loop lanjutan: AgentContinue (batas iterasi) → tanya user
+            # Lanjut/Berhenti. Lanjut = run_agent lagi TANPA reset konteks
+            # (ala opencode) — history + tool result tetap ada.
+            pending = text
+            first = True
+            keep_going = True
+            while keep_going:
+                keep_going = False
+                async for event in run_agent(
+                    pending,
+                    self.app.context,
+                    self.app.cfg,
+                    llm_client=self.app.llm_client,
+                    confirm=self._confirm,
+                    ask_user=self._ask_user,
+                    mode_manager=self.app.mode_manager if first else None,
+                    active_tools=self.app.mode_manager.get_active_tools(),
+                    composer=self.app.composer,
+                    output_cb=self._live_sink,
+                    continue_on_limit=not first,
+                ):
+                    first = False
+                    if isinstance(event, AgentText):
+                        await chat.append_assistant_text(event.delta)
+                    elif isinstance(event, AgentToolStart):
+                        think.show(event.name)
+                        await chat.add_tool_row(event.call_id, event.name,
+                                                event.params)
+                    elif isinstance(event, AgentToolDone):
+                        think.show("thinking")
+                        self._tools_run += 1
+                        await chat.drop_live_output(event.call_id)
+                        await chat.update_tool_row(event.call_id, event.name,
+                                                   event.success, event.result)
+                    elif isinstance(event, AgentDone):
+                        pass  # teks sudah ter-stream penuh
+                    elif isinstance(event, AgentUsage):
+                        self._sess_prompt += event.prompt_tokens
+                        self._sess_completion += event.completion_tokens
+                        self._sess_cost += event.cost_usd
+                    elif isinstance(event, AgentContinue):
+                        choice = await self.app.push_screen(
+                            ContinueDialog(event.summary, event.limit),
+                            wait_for_dismiss=True)
+                        if choice == "lanjut":
+                            await chat.add_info(
+                                f"Lanjut setelah {event.tool_count} tool call…")
+                            pending = ("Lanjutkan tugas sebelumnya sampai selesai. "
+                                       "Jangan ulangi tool yang hasilnya sudah ada.")
+                            keep_going = True
+                        else:
+                            await chat.add_info(
+                                "Berhenti di batas iterasi — ketik pesan buat lanjut manual.")
+                        break
+                    elif isinstance(event, AgentError):
+                        await chat.add_error(event.message)
         finally:
             set_research_sink(None)
             think.hide()

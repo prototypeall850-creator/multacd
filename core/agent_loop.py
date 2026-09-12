@@ -89,11 +89,34 @@ class AgentUsage:
 
 
 @dataclass
+class AgentContinue:
+    """LLM minta lanjut padahal batas iterasi tercapai.
+
+    Bukan error — TUI tampilkan ringkasan + tombol Lanjut/Berhenti.
+    CLI fallback: auto-lanjut kalau stdin bukan TTY? tidak — default berhenti.
+    Lihat run_agent(continue_on_limit) + main_screen._run_turn.
+    """
+
+    tool_count: int
+    limit: int
+    summary: str  # ringkasan tool terakhir biar user bisa nilai
+
+
+@dataclass
 class AgentError:
     message: str
 
 
-AgentEvent = AgentText | AgentToolStart | AgentToolDone | AgentDone | AgentUsage | AgentError
+def _stuck_error(tool_name: str) -> AgentError:
+    """Pesan stagnan: tool+args sama gagal error-sama 3x beruntun."""
+    return AgentError(
+        f"`{tool_name}` gagal dengan error yang sama 3x beruntun — "
+        "kemungkinan stuck. Coba pecah tugas jadi langkah kecil "
+        "atau kasih instruksi lebih spesifik."
+    )
+
+
+AgentEvent = AgentText | AgentToolStart | AgentToolDone | AgentDone | AgentUsage | AgentContinue | AgentError
 
 
 async def _stdin_confirm(tool_name: str, params: dict[str, Any]) -> str:
@@ -143,8 +166,17 @@ async def run_agent(
     active_tools: list[str] | None = None,
     composer: PromptComposer | None = None,
     output_cb: OutputCallback | None = None,
+    continue_on_limit: bool = False,
 ) -> AsyncIterator[AgentEvent]:
-    """Jalankan satu turn agent. Yield AgentEvent secara real-time."""
+    """Jalankan satu turn agent. Yield AgentEvent secara real-time.
+
+    Batas iterasi (ala opencode): tiap LLM round yang berisi tool call
+    = 1 step. Capai limit → yield AgentContinue (bukan AgentError).
+    TUI tanya user Lanjut/Berhenti; continue_on_limit=True (dipakai
+    retry lanjutan) langsung lanjut tanpa tanya. Infinite loop nyata
+    (LLM ngulang tool sama tanpa progres) tetap berhenti via deteksi
+    stagnan di bawah.
+    """
     def _system_prompt() -> str:
         return composer.compose() if composer is not None else SYSTEM_PROMPT
 
@@ -182,12 +214,48 @@ async def run_agent(
     context.add_message("user", user_input)
 
     iteration = 0
+    tool_rounds = 0  # round LLM yang berisi tool call (step ala opencode)
+    recent_names: list[str] = []  # nama tool terakhir (ringkasan Continue)
+    recent_fails: list[tuple[str, str, str]] = []  # (nama, args, err) stagnan
+
+    def _track_outcome(name: str, args: dict[str, Any],
+                       res: dict[str, Any]) -> bool:
+        """Catat hasil tool. True = stagnan: tool+args yang sama gagal
+        dengan error yang sama 3x beruntun (tanpa progres). Sukses atau
+        error yang beda = progres, tidak dihitung. Issue #28."""
+        import json as _js
+        try:
+            sig = _js.dumps(args, sort_keys=True, ensure_ascii=False,
+                            default=str)
+        except Exception:
+            sig = ""
+        err = str(res.get("error") or "").splitlines()
+        recent_fails.append((name, sig, err[0][:120] if err else ""))
+        if len(recent_fails) < 3:
+            return False
+        a, b, c = recent_fails[-3:]
+        return (a[0] == b[0] == c[0] and a[1] == b[1] == c[1]
+                and bool(a[2]) and a[2] == b[2] == c[2])
     while True:
         iteration += 1
-        if iteration > config.max_tool_iterations:
+        if iteration > config.max_tool_iterations and not continue_on_limit:
+            # Limit = proteksi, bukan vonis. Kasih user pilihan lanjut —
+            # opencode juga begini (lanjut tanpa reset konteks).
+            summary = ", ".join(recent_names[-3:]) or "(belum ada tool)"
+            yield AgentContinue(
+                tool_count=tool_rounds,
+                limit=config.max_tool_iterations,
+                summary=f"Batas {config.max_tool_iterations} iterasi tercapai "
+                        f"({tool_rounds} tool call: {summary}). "
+                        "Pilih Lanjut buat terusin, Berhenti buat sudahi.",
+            )
+            return
+        if iteration > config.max_tool_iterations * 3:
+            # Safety net absolut: 3x limit tanpa selesai = loop beneran.
             yield AgentError(
-                f"Mencapai batas {config.max_tool_iterations} iterasi tool. "
-                "Berhenti agar tidak infinite loop — coba pecah tugas jadi langkah kecil."
+                f"Berhenti setelah {config.max_tool_iterations * 3} iterasi "
+                "tanpa selesai — kemungkinan infinite loop. "
+                "Coba pecah tugas jadi langkah kecil."
             )
             return
 
@@ -218,9 +286,12 @@ async def run_agent(
             yield AgentDone(done.text)
             return
 
+        tool_rounds += 1
+
         # ── Act + Observe: proses tiap tool call ──
         for call in done.tool_calls:
             yield AgentToolStart(call.id, call.name, call.arguments)
+            recent_names.append(call.name)
 
             # Tool "ask" dicegat: jawab via callback, bukan execute_tool (stdin).
             if call.name == "ask":
@@ -229,6 +300,7 @@ async def run_agent(
                 ask_result = {"success": True, "result": answer, "error": None}
                 context.add_tool_result(call.id, "ask", ask_result)
                 yield AgentToolDone(call.id, "ask", True, ask_result)
+                _track_outcome("ask", call.arguments, ask_result)
                 continue
 
             decision = checker.check(call.name, call.arguments)
@@ -237,6 +309,9 @@ async def run_agent(
                     f"Tool `{call.name}` tidak tersedia. Pakai tool dari daftar yang ada.")
                 context.add_tool_result(call.id, call.name, deny_result)
                 yield AgentToolDone(call.id, call.name, False, deny_result)
+                if _track_outcome(call.name, call.arguments, deny_result):
+                    yield _stuck_error(call.name)
+                    return
                 continue
 
             if decision == "ask":
@@ -270,6 +345,9 @@ async def run_agent(
                         if not made.get("success"):
                             context.add_tool_result(call.id, call.name, made)
                             yield AgentToolDone(call.id, call.name, False, made)
+                            if _track_outcome(call.name, call.arguments, made):
+                                yield _stuck_error(call.name)
+                                return
                             continue
                         call.arguments["branch"] = new_branch
                         call.arguments.pop("allow_protected", None)
@@ -280,6 +358,9 @@ async def run_agent(
                         "cari cara lain atau tanya user.")
                     context.add_tool_result(call.id, call.name, cancel_result)
                     yield AgentToolDone(call.id, call.name, False, cancel_result)
+                    if _track_outcome(call.name, call.arguments, cancel_result):
+                        yield _stuck_error(call.name)
+                        return
                     continue
 
             # to_thread: tool sync jalan di thread, event loop tetap hidup.
@@ -294,6 +375,9 @@ async def run_agent(
                 _live if output_cb is not None else None)
             context.add_tool_result(call.id, call.name, result)
             yield AgentToolDone(call.id, call.name, result["success"], result)
+            if _track_outcome(call.name, call.arguments, result):
+                yield _stuck_error(call.name)
+                return
 
 
 if __name__ == "__main__":
@@ -389,13 +473,49 @@ if __name__ == "__main__":
         assert "tidak tersedia" in ctx.get_messages()[-2]["content"]
         assert isinstance(events[-1], AgentDone)
 
-        # 6. Infinite loop → berhenti di batas
+        # 6. Limit → AgentContinue (bukan error): user bisa lanjut.
+        # continue_on_limit=True = lanjutan tanpa tanya (dipakai TUI).
+        # NOTE: jangan import ulang core.agent_loop di sini (double-import
+        # trap python -m: kelas ganda, isinstance gagal). Pakai nama lokal.
         cfg2 = Config(model="m", api_key="k", max_tool_iterations=3)
         fake = FakeLLM([StreamDone("", [_TCR("c9", "list_dir", {})])] * 10)
         ctx = ConversationContext()
         events = await _drain(run_agent("loop", ctx, cfg2, llm_client=fake,
                                         confirm=_no_confirm))
-        assert isinstance(events[-1], AgentError) and "3 iterasi" in events[-1].message
+        assert isinstance(events[-1], AgentContinue), events[-1]
+        assert events[-1].limit == 3 and events[-1].tool_count == 3
+        assert "list_dir" in events[-1].summary
+        # Lanjutan: konteks utuh, loop terus sampai LLM selesai.
+        # 5 tool (< 3x limit=9) lalu selesai → AgentDone, bukan safety net.
+        fake = FakeLLM([StreamDone("", [_TCR("c9", "list_dir", {})])] * 5
+                       + [StreamDone("akhirnya selesai", [])])
+        ctx = ConversationContext()
+        events = await _drain(run_agent("loop", ctx, cfg2, llm_client=fake,
+                                        confirm=_no_confirm,
+                                        continue_on_limit=True))
+        assert isinstance(events[-1], AgentDone), events[-1]
+        assert "selesai" in events[-1].text
+        # Safety net absolut: 3x limit tanpa selesai = error beneran.
+        # Pakai call SUKSES berulang (stagnan cuma bunuh gagal-sama-3x).
+        fake = FakeLLM([StreamDone("", [_TCR("c9", "list_dir", {})])] * 100)
+        ctx = ConversationContext()
+        events = await _drain(run_agent("loop", ctx, cfg2, llm_client=fake,
+                                        confirm=_no_confirm,
+                                        continue_on_limit=True))
+        assert isinstance(events[-1], AgentError), events[-1]
+        assert "9 iterasi" in events[-1].message
+
+        # 6b. Stagnan: tool+args sama GAGAL error-sama 3x → setop.
+        # Sukses berulang = progres (retry), tidak dihitung.
+        cfg3 = Config(model="m", api_key="k", max_tool_iterations=20)
+        fake = FakeLLM([StreamDone("", [_TCR("c1", "read_file",
+                                            {"path": "a.py"})])] * 5)
+        ctx = ConversationContext()
+        events = await _drain(run_agent("stuck", ctx, cfg3, llm_client=fake,
+                                        confirm=_no_confirm))
+        assert isinstance(events[-1], AgentError), events[-1]
+        assert "3x" in events[-1].message and "read_file" in events[-1].message
+        # Sukses-sama 3x = bukan stagnan (dibuktikan skenario 6 lanjutan).
 
         # 7. Tool ask() dicegat via callback (tanpa stdin)
         async def _answer(q):

@@ -11,7 +11,12 @@ from __future__ import annotations
 
 import asyncio
 
-from core.agent_loop import AgentDone, AgentError, run_agent
+from core.agent_loop import (
+    AgentContinue,
+    AgentDone,
+    AgentError,
+    run_agent,
+)
 from core.llm_client import StreamDone, ToolCallRequest
 from core.prompt_composer import PromptComposer
 from memory.context import ConversationContext
@@ -74,14 +79,40 @@ def test_mode_switch_refreshes_system_prompt(sample_config, fake_llm_factory):
     assert "MODE-B" in fake.seen[-1][0]["content"]
 
 
+def _loop_script(n: int) -> list:
+    """n round list_dir sukses + 1 selesai. Fresh tiap panggil
+    (FakeLLM pop dari list — jangan share antar run)."""
+    return [StreamDone("", [ToolCallRequest(id=f"c{i}", name="list_dir",
+                                            arguments={"path": "."})])
+            for i in range(n)]
+
+
 def test_max_iterations_stops_gracefully(sample_config, fake_llm_factory):
     sample_config.max_tool_iterations = 2
-    script = [StreamDone("", [ToolCallRequest(id=f"c{i}", name="list_dir",
-                                              arguments={"path": "."})])
-              for i in range(5)]
-    fake = fake_llm_factory(script)
+    fake = fake_llm_factory(_loop_script(5))
     ctx = ConversationContext()
     events = _run(_drain(run_agent("loop", ctx, sample_config,
                                    llm_client=fake, confirm=_yes)))
-    assert any(isinstance(e, AgentError) for e in events)
-    assert "batas 2 iterasi" in events[-1].message
+    # Limit = tawaran lanjut, bukan error vonis.
+    assert isinstance(events[-1], AgentContinue)
+    assert "Batas 2 iterasi" in events[-1].summary
+    # Lanjutan (continue_on_limit) terus sampai LLM selesai.
+    fake2 = fake_llm_factory([*_loop_script(5), StreamDone("selesai", [])])
+    ctx2 = ConversationContext()
+    events2 = _run(_drain(run_agent("loop", ctx2, sample_config,
+                                    llm_client=fake2, confirm=_yes,
+                                    continue_on_limit=True)))
+    assert isinstance(events2[-1], AgentDone)
+
+
+def test_stagnant_loop_detected(sample_config, fake_llm_factory):
+    # read_file a.py (tak ada) = gagal error-sama → stagnan di 3x.
+    sample_config.max_tool_iterations = 20
+    script = [StreamDone("", [ToolCallRequest(id="c1", name="read_file",
+                                              arguments={"path": "a.py"})])] * 5
+    fake = fake_llm_factory(script)
+    ctx = ConversationContext()
+    events = _run(_drain(run_agent("stuck", ctx, sample_config,
+                                   llm_client=fake, confirm=_yes)))
+    assert isinstance(events[-1], AgentError)
+    assert "3x" in events[-1].message
