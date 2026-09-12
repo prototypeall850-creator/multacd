@@ -135,6 +135,7 @@ async def run_agent(
     composer: PromptComposer | None = None,
     output_cb: OutputCallback | None = None,
     continue_on_limit: bool = False,
+    checker: PermissionChecker | None = None,
 ) -> AsyncIterator[AgentEvent]:
     """Jalankan satu turn agent. Yield AgentEvent secara real-time.
 
@@ -144,6 +145,11 @@ async def run_agent(
     retry lanjutan) langsung lanjut tanpa tanya. Infinite loop nyata
     (LLM ngulang tool sama tanpa progres) tetap berhenti via deteksi
     stagnan di bawah.
+
+    `checker` opsional biar pemilik sesi (AgentController) bisa pakai
+    satu PermissionChecker lintas turn — approve [A] jadi beneran
+    per-sesi, bukan hilang tiap turn (issue #32). Default None =
+    checker baru per turn (perilaku lama, dipakai CLI/test).
     """
     def _system_prompt() -> str:
         return composer.compose() if composer is not None else SYSTEM_PROMPT
@@ -159,7 +165,7 @@ async def run_agent(
         return
 
     llm = llm_client or setup_client(config)
-    checker = PermissionChecker(config)
+    checker = checker or PermissionChecker(config)
     confirm_cb = confirm or _stdin_confirm
     ask_cb = ask_user or _stdin_ask
     defs = get_tool_definitions()
