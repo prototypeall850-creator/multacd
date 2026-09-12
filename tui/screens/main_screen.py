@@ -12,19 +12,17 @@ from textual.containers import Horizontal
 from textual.screen import Screen
 from textual.widgets import TextArea
 
-from core.agent_loop import (
+from core.agent_events import (
     AgentContinue,
-    AgentDone,
     AgentError,
+    AgentEvent,
     AgentText,
     AgentToolDone,
     AgentToolStart,
-    AgentUsage,
-    run_agent,
 )
 from core.codebase import get_git_summary
-from core.research.bus import set_research_sink
-from core.session_state import AgentStatus, SessionState, reduce_event
+from core.session_state import AgentStatus, SessionState
+from tui.controllers.agent_controller import AgentController, TurnHooks
 from tui.widgets.chat_panel import ChatPanel
 from tui.widgets.confirm_dialog import AskDialog, ContinueDialog
 from tui.widgets.diff_viewer import DiffViewer
@@ -138,6 +136,9 @@ class MainScreen(Screen):
         # Satu sumber kebenaran status agent (R3). Dulu 5 field tersebar
         # (_turn_running/_tools_run/_sess_*) — sekarang SessionState.
         self.session = SessionState()
+        # Controller loop agent (R4) — dibuat sekali biar approve [A]
+        # persist lintas turn (issue #32).
+        self._agent_ctl: AgentController | None = None
 
     @property
     def _turn_running(self) -> bool:
@@ -692,6 +693,18 @@ class MainScreen(Screen):
                 inbar.focus()
             self.session.end_turn()
 
+    def _agent(self) -> AgentController:
+        """Controller sesi (dibuat sekali — checker [A] persist lintas turn)."""
+        if self._agent_ctl is None:
+            self._agent_ctl = AgentController(
+                self.session, self.app.cfg, self.app.context)
+        ctl = self._agent_ctl
+        # Live refs — hormati /model & /mode terbaru tiap turn.
+        ctl.llm_client = self.app.llm_client
+        ctl.composer = self.app.composer
+        ctl.mode_manager = self.app.mode_manager
+        return ctl
+
     async def _run_turn(self, text: str) -> None:
         chat = self.query_one(ChatPanel)
         bar = self.query_one(StatusBar)
@@ -708,71 +721,50 @@ class MainScreen(Screen):
                 await chat.clear()
             await chat.add_user(text)
             await chat.start_assistant()
-            # Pasang sink research: event orchestrator (quick/deep) diteruskan
-            # ke panel via call_from_thread (aman dari thread manapun).
-            set_research_sink(
-                lambda ev: self.app.call_from_thread(
-                    self._apply_research_event, ev))
-            # Loop lanjutan: AgentContinue (batas iterasi) → tanya user
-            # Lanjut/Berhenti. Lanjut = run_agent lagi TANPA reset konteks
-            # (ala opencode) — history + tool result tetap ada.
-            pending = text
-            first = True
-            keep_going = True
-            while keep_going:
-                keep_going = False
-                async for event in run_agent(
-                    pending,
-                    self.app.context,
-                    self.app.cfg,
-                    llm_client=self.app.llm_client,
-                    confirm=self._confirm,
-                    ask_user=self._ask_user,
-                    mode_manager=self.app.mode_manager if first else None,
-                    active_tools=self.app.mode_manager.get_active_tools(),
-                    composer=self.app.composer,
-                    output_cb=self._live_sink,
-                    continue_on_limit=not first,
-                ):
-                    first = False
-                    if isinstance(event, AgentText):
-                        reduce_event(self.session, event)
-                        await chat.append_assistant_text(event.delta)
-                    elif isinstance(event, AgentToolStart):
-                        reduce_event(self.session, event)
-                        think.show(event.name)
-                        await chat.add_tool_row(event.call_id, event.name,
-                                                event.params)
-                    elif isinstance(event, AgentToolDone):
-                        reduce_event(self.session, event)
-                        think.show("thinking")
-                        await chat.drop_live_output(event.call_id)
-                        await chat.update_tool_row(event.call_id, event.name,
-                                                   event.success, event.result)
-                    elif isinstance(event, AgentDone):
-                        reduce_event(self.session, event)  # teks sudah ter-stream penuh
-                    elif isinstance(event, AgentUsage):
-                        reduce_event(self.session, event)
-                    elif isinstance(event, AgentContinue):
-                        reduce_event(self.session, event)
-                        choice = await self.app.push_screen(
-                            ContinueDialog(event.summary, event.limit),
-                            wait_for_dismiss=True)
-                        if choice == "lanjut":
-                            await chat.add_info(
-                                f"Lanjut setelah {event.tool_count} tool call…")
-                            pending = ("Lanjutkan tugas sebelumnya sampai selesai. "
-                                       "Jangan ulangi tool yang hasilnya sudah ada.")
-                            keep_going = True
-                        else:
-                            await chat.add_info(
-                                "Berhenti di batas iterasi — ketik pesan buat lanjut manual.")
-                        break
-                    elif isinstance(event, AgentError):
-                        reduce_event(self.session, event)
-                        await chat.add_error(event.message)
+
+            async def _emit(event: AgentEvent) -> None:
+                if isinstance(event, AgentText):
+                    await chat.append_assistant_text(event.delta)
+                elif isinstance(event, AgentToolStart):
+                    think.show(event.name)
+                    await chat.add_tool_row(event.call_id, event.name,
+                                            event.params)
+                elif isinstance(event, AgentToolDone):
+                    think.show("thinking")
+                    await chat.drop_live_output(event.call_id)
+                    await chat.update_tool_row(event.call_id, event.name,
+                                               event.success, event.result)
+                elif isinstance(event, AgentError):
+                    await chat.add_error(event.message)
+                # AgentDone: teks sudah ter-stream; AgentUsage/Continue:
+                # sudah dilipat ke session oleh controller.
+
+            async def _continue_prompt(ev: AgentContinue) -> bool:
+                choice = await self.app.push_screen(
+                    ContinueDialog(ev.summary, ev.limit),
+                    wait_for_dismiss=True)
+                if choice == "lanjut":
+                    await chat.add_info(
+                        f"Lanjut setelah {ev.tool_count} tool call…")
+                    return True
+                await chat.add_info(
+                    "Berhenti di batas iterasi — ketik pesan buat lanjut manual.")
+                return False
+
+            hooks = TurnHooks(
+                emit=_emit,
+                continue_prompt=_continue_prompt,
+                confirm=self._confirm,
+                ask_user=self._ask_user,
+                live=self._live_sink,
+                research=lambda ev: self.app.call_from_thread(
+                    self._apply_research_event, ev),
+            )
+            await self._agent().run_turn(
+                text, hooks,
+                active_tools=self.app.mode_manager.get_active_tools(),
+            )
         finally:
-            set_research_sink(None)
             think.hide()
             self._sync_mode_ui()
             bar.set_status("idle")
