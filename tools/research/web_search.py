@@ -41,23 +41,17 @@ SCHEMA: dict[str, Any] = {
 }
 
 
-def _resolve_provider(search_provider: str = "",
-                      search_api_key: str = "") -> tuple[Any, str | None]:
-    """Return (provider, error). Config file dibaca hanya kalau tidak dioverride."""
-    from search_providers import get_provider
-
+def _resolve_config(search_provider: str = "",
+                    search_api_key: str = "") -> tuple[Any, str | None]:
+    """Return (config, error). Config file dibaca hanya kalau tidak dioverride."""
     if search_provider.strip():
         # Override eksplisit (test/orchestrator) — tanpa sentuh config file.
-        cfg = SimpleNamespace(search_provider=search_provider,
-                              search_api_key=search_api_key)
-        try:
-            return get_provider(cfg), None
-        except Exception as e:
-            return None, str(e)
+        return SimpleNamespace(search_provider=search_provider,
+                               search_api_key=search_api_key), None
     try:
         from core.config import get_active_config, load_config
         # Active config sesi (Bug 3) — hormati --config & /model.
-        cfg = get_active_config() or load_config()
+        return (get_active_config() or load_config()), None
     except SystemExit:
         return None, (
             "Search provider belum disetup. Tambah `search_provider` dan "
@@ -65,10 +59,6 @@ def _resolve_provider(search_provider: str = "",
             "(atau pakai search_provider duckduckgo yang gratis).")
     except Exception as e:
         return None, f"Gagal baca config: {e}"
-    try:
-        return get_provider(cfg), None
-    except Exception as e:
-        return None, str(e)
 
 
 def web_search(query: str, num_results: int = 5,
@@ -77,18 +67,23 @@ def web_search(query: str, num_results: int = 5,
     if not query.strip():
         return fail("Query pencarian tidak boleh kosong.")
     num_results = max(1, min(int(num_results or 5), 20))
-    provider, err = _resolve_provider(search_provider, search_api_key)
-    if provider is None:
+    cfg, err = _resolve_config(search_provider, search_api_key)
+    if cfg is None:
         return fail(err or "Provider search tidak tersedia.")
     try:
-        results = provider.search(query.strip(), num_results=num_results)
-    except SearchProviderError as e:
+        from core.config import ConfigError
+        from search_providers import search_with_fallback
+        results, used, notice = search_with_fallback(
+            cfg, query.strip(), num_results)
+    except (SearchProviderError, ConfigError) as e:
         return fail(str(e))
     except Exception as e:
         return fail(f"Search gagal ({type(e).__name__}): {e}")
     return ok({"query": query.strip(),
                "results": [r.to_dict() for r in results],
-               "count": len(results)})
+               "count": len(results),
+               "provider": used,
+               "notice": notice})
 
 
 if __name__ == "__main__":

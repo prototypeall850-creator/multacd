@@ -73,8 +73,10 @@ show_thinking: false         # tampilkan reasoning LLM (verbose mode)
 icon_style: "auto"           # auto | nerdfonts | unicode | ascii
 
 # ── Search Provider (BYOK, Phase 3) ────────────────────
-search_provider: "tavily"    # tavily | exa | brave | serpapi | duckduckgo
-search_api_key: "tvly-xxxx"  # tidak perlu untuk duckduckgo (gratis, tidak resmi)
+search_provider: "duckduckgo"  # default gratis tanpa key (Termux aman).
+    # tavily butuh pip install "multacd[tavily]"; exa butuh "multacd[exa]"
+    # (keduanya rantai Rust — mustahil di Termux, pakai brave/serpapi/ddg di HP)
+search_api_key: ""  # tvly-xxxx / exa / brave / serpapi; tidak perlu untuk duckduckgo
 
 # ── Research Settings (Phase 3) ────────────────────────
 search_results_per_query: 5     # hasil per query saat search
@@ -339,7 +341,7 @@ class Config:
     icon_style: str = "auto"
 
     # ── Search provider (BYOK, Phase 3) ──
-    search_provider: str = "tavily"
+    search_provider: str = "duckduckgo"
     search_api_key: str = ""
 
     # ── Research settings (Phase 3) ──

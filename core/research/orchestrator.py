@@ -42,11 +42,13 @@ class QuickResult:
     answer: str = ""
     sources: list[SearchResult] = field(default_factory=list)
     queries: list[str] = field(default_factory=list)
+    notice: str = ""  # fallback provider (#30) — tampilkan ke user
 
     def to_dict(self) -> dict[str, Any]:
         return {"answer": self.answer,
                 "sources": [s.to_dict() for s in self.sources],
-                "queries": self.queries}
+                "queries": self.queries,
+                "notice": self.notice}
 
 
 def _norm(url: str) -> str:
@@ -54,14 +56,24 @@ def _norm(url: str) -> str:
 
 
 def _default_search_fn(config: Any) -> Callable:
-    from search_providers import get_provider
-
-    provider = get_provider(config)
+    from search_providers import search_with_fallback
 
     def _search(query: str, num: int) -> list[SearchResult]:
-        return provider.search(query, num_results=num)
-
+        try:
+            results, used, notice = search_with_fallback(config, query, num)
+        except Exception:
+            return []  # STEP panggil: gather gagal → found=[] (di bawah)
+        _search.last_notice = notice  # type: ignore[attr-defined]
+        _search.last_provider = used  # type: ignore[attr-defined]
+        return results
+    _search.last_notice = ""  # type: ignore[attr-defined]
+    _search.last_provider = ""  # type: ignore[attr-defined]
     return _search
+
+
+def _search_notice(search_fn: Callable | None) -> str:
+    """Notice fallback provider dari search_fn (\"\" kalau langsung/fake)."""
+    return str(getattr(search_fn, "last_notice", "") or "")
 
 
 def _default_scrape_fn(config: Any) -> Callable:
@@ -148,7 +160,7 @@ async def quick_research(
     if not sources:
         return QuickResult(
             answer="Tidak ada hasil untuk topik ini. Coba rephrasing pertanyaan.",
-            sources=[], queries=queries)
+            sources=[], queries=queries, notice=_search_notice(search_fn))
 
     # STEP 3 — scrape parallel (yang sudah punya konten, mis. Tavily, skip)
     async def _scrape_one(s: SearchResult) -> None:
@@ -190,7 +202,8 @@ async def quick_research(
     if not answer:
         answer = "(LLM tidak mengembalikan jawaban.)"
     _emit({"type": "answer", "answer": answer})
-    return QuickResult(answer=answer, sources=sources, queries=queries)
+    return QuickResult(answer=answer, sources=sources, queries=queries,
+                       notice=_search_notice(search_fn))
 
 
 @dataclass
@@ -198,11 +211,13 @@ class DeepResult:
     report: str = ""
     sources: list[SearchResult] = field(default_factory=list)
     rounds: list[dict[str, Any]] = field(default_factory=list)
+    notice: str = ""  # fallback provider (#30) — tampilkan ke user
 
     def to_dict(self) -> dict[str, Any]:
         return {"report": self.report,
                 "sources": [s.to_dict() for s in self.sources],
-                "rounds": self.rounds}
+                "rounds": self.rounds,
+                "notice": self.notice}
 
 
 def _parse_analysis(text: str) -> dict[str, Any]:
@@ -351,7 +366,8 @@ async def deep_research(
                 return DeepResult(
                     report="Tidak ada hasil untuk topik ini. "
                            "Coba rephrasing pertanyaan.",
-                    sources=[], rounds=rounds)
+                    sources=[], rounds=rounds,
+                    notice=_search_notice(search_fn))
             stop_reason = (f"Tidak ada sumber baru di round {rnd} — "
                            "melanjutkan ke synthesis...")
             _emit({"type": "limit", "reason": stop_reason})
@@ -434,7 +450,8 @@ async def deep_research(
         report = (f"Laporan gagal disintesis ({type(e).__name__}: {e}). "
                   f"Temuan mentah {len(rounds)} round tetap tersedia.")
     _emit({"type": "report", "report": report})
-    return DeepResult(report=report, sources=all_sources, rounds=rounds)
+    return DeepResult(report=report, sources=all_sources, rounds=rounds,
+                      notice=_search_notice(search_fn))
 
 
 if __name__ == "__main__":
