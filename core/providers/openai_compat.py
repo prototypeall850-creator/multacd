@@ -136,6 +136,29 @@ def map_http_error(status: int, body: str, model: str) -> ProviderError:
     return ProviderError(f"Provider error HTTP {status}. {snippet}".strip())
 
 
+def _sanitize_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Bersihkan messages sebelum kirim (ala opencode transform.ts).
+
+    - `tool_calls: []` / None → key di-drop (provider strict 400 kalau
+      array kosong ikut terkirim — issue #25).
+    - `content: None` tanpa tool_calls → `""` (beberapa gateway nolak null).
+    - `content: None` + tool_calls non-kosong → dibiarkan (valid OpenAI).
+    Pure function — input tidak dimutasi.
+    """
+    clean: list[dict[str, Any]] = []
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        msg = dict(m)
+        tcs = msg.get("tool_calls")
+        if not tcs:
+            msg.pop("tool_calls", None)
+        if msg.get("content") is None and not msg.get("tool_calls"):
+            msg["content"] = ""
+        clean.append(msg)
+    return clean
+
+
 async def stream_chat(spec: ProviderSpec, api_key: str,
                       messages: list[dict[str, Any]],
                       tools: list[dict[str, Any]] | None,
@@ -146,7 +169,7 @@ async def stream_chat(spec: ProviderSpec, api_key: str,
     """Kirim chat completions streaming. `client` injeksi buat test."""
     body: dict[str, Any] = {
         "model": spec.model,
-        "messages": messages,
+        "messages": _sanitize_messages(messages),
         "stream": True,
         "stream_options": {"include_usage": True},
         "max_tokens": max_tokens,

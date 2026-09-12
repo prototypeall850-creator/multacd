@@ -56,9 +56,18 @@ class ConversationContext:
         (mis. ToolCallRequest dari core.llm_client). Wajib ada agar
         provider tidak 400 pada turn berikutnya (tool_call_id harus
         merujuk ke assistant message sebelumnya).
+
+        Belajar dari opencode (AI SDK): tool adalah content part —
+        part kosong tidak pernah dikirim. Jadi kalau `calls` kosong,
+        key `tool_calls` di-OMIT total (bukan `[]`): provider strict
+        (400 `tool_calls must be non-empty if provided`) nolak array
+        kosong. Lihat issue #25.
         """
         import json as _json
 
+        if not calls:
+            self._messages.append({"role": "assistant", "content": text or ""})
+            return
         self._messages.append({
             "role": "assistant",
             "content": text or None,

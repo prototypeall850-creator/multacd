@@ -34,6 +34,10 @@ def test_plain_text_no_tool(sample_config, fake_llm_factory):
     events = _run(_drain(run_agent("hi", ctx, sample_config, llm_client=fake)))
     assert isinstance(events[-1], AgentDone)
     assert "halo" in events[-1].text
+    # #25: assistant tanpa tool TIDAK boleh bawa key tool_calls
+    # (provider strict 400 kalau array kosong ikut terkirim).
+    assts = [m for m in ctx.get_messages() if m.get("role") == "assistant"]
+    assert assts and all("tool_calls" not in m for m in assts), assts
 
 
 def test_single_auto_tool_runs(sample_config, fake_llm_factory, tmp_path):
