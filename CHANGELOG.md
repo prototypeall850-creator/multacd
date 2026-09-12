@@ -2,6 +2,15 @@
 
 Format: Keep a Changelog. Versi: Semantic Versioning.
 
+## [2.0.0b7] - 2026-09-12
+
+Beta v2 ketujuh (borongan): config key kosong dimaafkan (#27), limit jadi
+tawaran Lanjut/Berhenti + stagnan outcome-aware (#28), markup crash (#29),
+tavily+exa native tanpa SDK + fallback operasional (#30), key per-provider
++ /key /base (#31), splash cover + /connect + /models.
+
+Install: `pip install "multacd==2.0.0b7"` (tanpa --pre).
+
 ## [2.0.0b6] - 2026-09-12
 
 Beta v2 keenam — fix mode lupa ingatan (#26): system message di-refresh
