@@ -2,6 +2,13 @@
 
 Format: Keep a Changelog. Versi: Semantic Versioning.
 
+## [2.0.0b5] - 2026-09-12
+
+Beta v2 kelima — fix chat 2-turn 400 (#25): `add_assistant_tool_calls`
+omit key `tool_calls` saat tanpa tool + `_sanitize_messages` safety net
+di openai_compat. Belajar dari opencode `transform.ts` (part kosong
+tidak pernah dikirim). Install: `pip install "multacd==2.0.0b5"`.
+
 ## [2.0.0b4] - 2026-09-12
 
 Beta v2 keempat — Termux harusnya tembus sekarang (#24): `pydantic`

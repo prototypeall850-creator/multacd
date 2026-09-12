@@ -8,7 +8,7 @@ Saat bump versi (Step 10 → 1.0.0): ubah pyproject + FALLBACK di sini.
 
 from __future__ import annotations
 
-FALLBACK = "2.0.0b4"  # beta v2; samakan dengan pyproject.toml
+FALLBACK = "2.0.0b5"  # beta v2; samakan dengan pyproject.toml
 
 
 def get_version() -> str:

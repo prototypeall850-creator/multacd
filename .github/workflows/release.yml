@@ -101,7 +101,7 @@ jobs:
 
             ```bash
             pkg install -y python git
-            pip install "multacd==2.0.0b4"
+            pip install "multacd==2.0.0b5"
             ```
 
             Windows (PowerShell):
