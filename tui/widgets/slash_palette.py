@@ -147,11 +147,13 @@ class SlashPalette(Vertical):
 
 
 if __name__ == "__main__":
-    assert len(match_commands("")) == len(PALETTE_COMMANDS) == 8
+    assert len(match_commands("")) == len(PALETTE_COMMANDS) == 10
     assert [c for c, _ in match_commands("mo")] == ["/model"]
     got_r = [c for c, _ in match_commands("R")]
     assert got_r and got_r[0] == "/research"  # fuzzy: prefix menang
     assert [c for c, _ in match_commands("md")] == ["/model"]  # fuzzy baru
+    assert [c for c, _ in match_commands("ke")] == ["/key"]
+    assert [c for c, _ in match_commands("bas")] == ["/base"]
     assert match_commands("zzz") == []
     t = render_item("/model", "Switch", "mo")
     assert str(t) == "/model      Switch"

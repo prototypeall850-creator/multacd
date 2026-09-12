@@ -36,6 +36,8 @@ HELP_TEXT = (
     "  /clear         → bersihkan history, mulai sesi baru\n"
     "  /scan          → scan ulang codebase project\n"
     "  /model [nama]  → lihat / ganti model (cth: /model openai/gpt-4o)\n"
+    "  /key [KEY]     → lihat / pasang API key provider aktif\n"
+    "  /base [URL]    → lihat / pasang endpoint provider aktif\n"
     "  /soul          → tampilkan kepribadian agent yang aktif\n"
     "  /help          → tampilkan pesan ini"
 )
@@ -48,12 +50,14 @@ PALETTE_COMMANDS: tuple[tuple[str, str], ...] = (
     ("/clear", "Clear conversation history"),
     ("/scan", "Re-scan codebase"),
     ("/model", "Switch LLM model"),
+    ("/key", "Set provider API key"),
+    ("/base", "Set provider endpoint"),
     ("/soul", "Show active soul.md"),
     ("/help", "Show all commands"),
 )
 
 # Command yang butuh argumen lanjutan → Enter = autocomplete, bukan submit.
-COMMANDS_WITH_ARGS = frozenset({"/model"})
+COMMANDS_WITH_ARGS = frozenset({"/model", "/key", "/base"})
 
 MODE_PROMPTS = {
     MODE_CODE: (
@@ -254,17 +258,123 @@ class ModeManager:
                 return CommandResult(True, "Config tidak tersedia — model tidak bisa diganti.", None)
             if not arg.strip():
                 return CommandResult(True, "Nama model tidak boleh kosong.", None)
-            self._config.model = arg.strip()
-            return CommandResult(True, f"Model diganti ke: {self._config.model}", "model")
+            return self._switch_model(arg.strip())
+        if cmd == "/key":
+            return self._handle_key(arg)
+        if cmd == "/base":
+            return self._handle_base(arg)
         if cmd == "/help":
             return CommandResult(True, HELP_TEXT, None)
         if cmd == "/soul":
             return CommandResult(True, self._soul or "(soul kosong)", None)
         return CommandResult(True, f"Command tidak dikenal: {parts[0]}. Ketik /help.", None)
 
+    @staticmethod
+    def _mask(key: str) -> str:
+        return "***" if len(key) <= 6 else f"{key[:4]}***{key[-2:]}"
+
+    def _persist(self, updates: dict) -> str:
+        """Simpan ke config.yaml. Return "" ok, else pesan error."""
+        if self._config is None:
+            return " (config tak tersedia — hanya sesi ini)"
+        try:
+            from core.config import save_config_updates
+            save_config_updates(updates)
+        except OSError as e:
+            return f" (gagal simpan config: {e} — hanya sesi ini)"
+        return ""
+
+    def _switch_model(self, name: str) -> CommandResult:
+        """Ganti model + persist. Pindah provider tanpa key → warning.
+
+        Key/base lama TIDAK dibawa (dulu 401 diam-diam). Kredensial yang
+        dipakai = provider_keys[prov] atau top-level (lihat llm_client).
+        """
+        from core.providers import provider_id_of
+        assert self._config is not None
+        old_prov = provider_id_of(self._config.model)
+        new_prov = provider_id_of(name)
+        self._config.model = name
+        note = self._persist({"model": name})
+        msg = f"Model diganti ke: {name}{note}"
+        if new_prov and new_prov != old_prov \
+                and new_prov not in self._config.provider_keys:
+            if old_prov and old_prov not in self._config.provider_keys:
+                # Setup satu key: top-level milik provider lama → 401 pasti.
+                msg += (f"\nKey top-level milik `{old_prov}` — `{new_prov}` "
+                        f"butuh key sendiri: `/key KEY`.")
+            else:
+                msg += (f"\n`{new_prov}` pakai key top-level — kalau API "
+                        f"menolak (401), pasang via `/key KEY`.")
+            if new_prov not in ("openai", "anthropic", "gemini", "groq",
+                                "deepseek", "ollama") \
+                    and new_prov not in self._config.provider_bases \
+                    and not self._config.api_base:
+                msg += " Endpoint custom? `/base URL` dulu."
+        return CommandResult(True, msg, "model")
+
+    def _handle_key(self, arg: str) -> CommandResult:
+        """Lihat/pasang API key provider dari model aktif."""
+        from core.providers import provider_id_of
+        if self._config is None:
+            return CommandResult(True, "Config tidak tersedia.", None)
+        prov = provider_id_of(self._config.model) or "(default)"
+        if not arg.strip():
+            saved = self._config.provider_keys.get(prov, "")
+            cur = saved or self._config.api_key
+            have = f"{self._mask(cur)} ({'per-provider' if saved else 'top-level'})" if cur else "(belum ada)"
+            return CommandResult(True, f"Key `{prov}`: {have}. Pasang: /key KEY", None)
+        key = arg.strip()
+        if prov == "(default)":
+            self._config.api_key = key
+            note = self._persist({"api_key": key})
+            return CommandResult(True, f"Key default disimpan{note}.", "model")
+        self._config.provider_keys[prov] = key
+        note = self._persist({"provider_keys": {prov: key}})
+        return CommandResult(True, f"Key `{prov}` disimpan{note}.", "model")
+
+    def _handle_base(self, arg: str) -> CommandResult:
+        """Lihat/pasang endpoint provider dari model aktif."""
+        from core.providers import provider_id_of
+        if self._config is None:
+            return CommandResult(True, "Config tidak tersedia.", None)
+        prov = provider_id_of(self._config.model) or "(default)"
+        if not arg.strip():
+            saved = self._config.provider_bases.get(prov, "")
+            cur = saved or self._config.api_base or "(bawaan provider)"
+            src = "per-provider" if saved else ("top-level" if self._config.api_base else "bawaan")
+            return CommandResult(True, f"Endpoint `{prov}`: {cur} ({src}). Pasang: /base URL, hapus: /base -", None)
+        if arg.strip() == "-":
+            if prov == "(default)":
+                self._config.api_base = None
+                note = self._persist({"api_base": None})
+            else:
+                self._config.provider_bases.pop(prov, None)
+                note = self._persist({"provider_bases": {prov: ""}})
+            return CommandResult(True, f"Endpoint `{prov}` dihapus{note}.", "model")
+        base = arg.strip().rstrip("/")
+        if prov == "(default)":
+            self._config.api_base = base
+            note = self._persist({"api_base": base})
+        else:
+            self._config.provider_bases[prov] = base
+            note = self._persist({"provider_bases": {prov: base}})
+        return CommandResult(True, f"Endpoint `{prov}` → {base}{note}.", "model")
+
 
 if __name__ == "__main__":
+    import os as _os
+    import tempfile as _tf
+
     from core.config import Config as _Config
+
+    # /model /key /base persist ke file — isolasi ke tmp (jangan sentuh
+    # config asli user).
+    _os.environ["MULTACD_CONFIG"] = str(
+        __import__("pathlib").Path(_tf.mkdtemp(prefix="multacd-mm-"))
+        / "config.yaml")
+    from core.config import save_config_updates as _save
+    _save({"model": "m", "api_key": "k"})  # reload di 6b butuh api_key
 
     cfg = _Config(model="m", api_key="k")
     mm = ModeManager(config=cfg, soul="soul-test")
@@ -318,10 +428,37 @@ if __name__ == "__main__":
     assert mm.handle_command("/clear").action == "clear"
     assert mm.handle_command("/scan").action == "scan"
 
-    # 6. /model lihat + ganti
+    # 6. /model lihat + ganti (persist ke file isolasi)
     assert "m" in mm.handle_command("/model").message
     r = mm.handle_command("/model openai/gpt-4o")
     assert cfg.model == "openai/gpt-4o" and r.action == "model", (r, cfg.model)
+    assert "Model diganti ke: openai/gpt-4o" in r.message, r.message
+
+    # 6b. Pindah provider tanpa key → warning (dulu 401 diam-diam, #31).
+    # cfg single-key: top-level milik "m" (prov "") → openai = provider baru.
+    mm_b = ModeManager(config=_Config(model="groq/llama-3.3-70b-versatile",
+                                      api_key="gsk-x"))
+    r = mm_b.handle_command("/model anthropic/claude-haiku-4-5")
+    assert r.action == "model" and "/key" in r.message, r.message
+    # Pasang key → pindah lagi diam (key sudah ada).
+    r = mm_b.handle_command("/key sk-ant-yyy")
+    assert r.action == "model" and "anthropic" in r.message, r.message
+    assert mm_b._config.provider_keys["anthropic"] == "sk-ant-yyy"
+    r = mm_b.handle_command("/model anthropic/claude-sonnet-4-6")
+    assert "/key" not in r.message, r.message
+    # /key lihat (mask) + /base pasang/hapus.
+    assert "sk-ant" not in mm_b.handle_command("/key").message
+    assert "***" in mm_b.handle_command("/key").message
+    r = mm_b.handle_command("/base https://proxy.local/v1/")
+    assert "proxy.local/v1" in r.message, r.message
+    assert mm_b._config.provider_bases["anthropic"] == "https://proxy.local/v1"
+    r = mm_b.handle_command("/base -")
+    assert "dihapus" in r.message and "anthropic" not in mm_b._config.provider_bases
+    # Persist betulan: baca ulang file → model + key ada.
+    from core.config import load_config as _load
+    reloaded = _load()
+    assert reloaded.model == "anthropic/claude-sonnet-4-6", reloaded.model
+    assert reloaded.provider_keys.get("anthropic") == "sk-ant-yyy"
 
     # 7. Unknown command + "/" kosong tidak crash
     assert "tidak dikenal" in mm.handle_command("/ngawur").message
@@ -339,4 +476,4 @@ if __name__ == "__main__":
     mm4 = ModeManager(rescan_fn=lambda: (_ for _ in ()).throw(RuntimeError("disk")))
     assert "gagal" in mm4.handle_command("/scan").message.lower()
 
-    print("✅ mode_manager self-test OK (9 skenario + research aktif)")
+    print("✅ mode_manager self-test OK (10 skenario + key/base)")

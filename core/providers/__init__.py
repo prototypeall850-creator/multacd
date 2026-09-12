@@ -43,6 +43,19 @@ class ProviderSpec:
     headers: dict[str, str] = field(default_factory=dict)
 
 
+def provider_id_of(config_model: str) -> str:
+    """Prefix provider dari 'openai/gpt-4o' → 'openai'. Tanpa '/' → ''.
+
+    Dipakai llm_client + /model + /key buat pilih kredensial per-provider.
+    Selalu lowercase; prefix tak dikenal dikembalikan apa adanya
+    (routing custom via api_base).
+    """
+    cur = (config_model or "").strip()
+    if "/" not in cur:
+        return ""
+    return cur.split("/", 1)[0].lower().strip()
+
+
 def resolve_provider(config_model: str, api_base: str | None = None) -> ProviderSpec:
     """Routing 'anthropic/claude-x' → adapter + URL + model native.
 

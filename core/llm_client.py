@@ -33,6 +33,7 @@ from core.providers import (
     ProviderError,
     ProviderNotFoundError,
     ProviderRateLimitError,
+    provider_id_of,
     resolve_provider,
 )
 
@@ -102,7 +103,13 @@ class LLMClient:
         langsung raise LLMError.
         """
         try:
-            spec = resolve_provider(self.config.model, self.config.api_base)
+            prov = provider_id_of(self.config.model)
+            # Key/base per-provider (#31); fallback = top-level (kompat).
+            api_key = (self.config.provider_keys.get(prov)
+                       or self.config.api_key) if prov else self.config.api_key
+            api_base = (self.config.provider_bases.get(prov)
+                        or self.config.api_base) if prov else self.config.api_base
+            spec = resolve_provider(self.config.model, api_base)
         except ProviderError as e:
             raise LLMError(str(e)) from e
         if spec.kind == "anthropic":
@@ -116,7 +123,7 @@ class LLMClient:
             yielded_any_text = False
             try:
                 async for event in stream_chat(
-                        spec, self.config.api_key, messages, tools,
+                        spec, api_key, messages, tools,
                         self.config.max_tokens, self.config.temperature,
                         REQUEST_TIMEOUT):
                     if isinstance(event, StreamText) and event.content:

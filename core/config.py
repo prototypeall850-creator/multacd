@@ -210,6 +210,24 @@ def _choice(loc: str, v: object, errs: list[str], options: tuple[str, ...],
     return s
 
 
+def _strmap(loc: str, v: object, errs: list[str]) -> dict[str, str]:
+    """Dict str→str (provider_keys/bases). None → {}. Key dilower-case,
+    value kosong dibuang. Bukan mapping / value bukan str = error."""
+    if v is None:
+        return {}
+    if not isinstance(v, dict):
+        errs.append(f"{loc}: harus mapping, dapat {type(v).__name__}")
+        return {}
+    out: dict[str, str] = {}
+    for k, val in v.items():
+        if not isinstance(k, str) or not isinstance(val, str):
+            errs.append(f"{loc}.{k}: key dan value harus teks")
+            continue
+        if val.strip():
+            out[k.lower().strip()] = val
+    return out
+
+
 def _raise_if_errors(errs: list[str]) -> None:
     if errs:
         raise ConfigError("config tidak valid: " + "; ".join(errs), errs)
@@ -322,6 +340,10 @@ class Config:
     model: str = ""
     api_key: str = ""
     api_base: str | None = None
+    # Key/base per provider (#31): {"openai": "sk-...", ...}. Dipakai saat
+    # model pindah provider; fallback = api_key/api_base top-level.
+    provider_keys: dict = field(default_factory=dict)
+    provider_bases: dict = field(default_factory=dict)
 
     # ── Agent settings ──
     max_tokens: int = 8096
@@ -365,6 +387,10 @@ class Config:
         self.api_key = _str("api_key", self.api_key, errs, min_len=1)
         if self.api_base is not None:
             self.api_base = _str("api_base", self.api_base, errs)
+        self.provider_keys = _strmap("provider_keys", self.provider_keys,
+                                     errs)
+        self.provider_bases = _strmap("provider_bases", self.provider_bases,
+                                      errs)
         self.max_tokens = _int("max_tokens", self.max_tokens, errs, gt=0)
         self.temperature = _float("temperature", self.temperature, errs,
                                   ge=0.0, le=2.0)
@@ -504,6 +530,37 @@ def config_from_dict(raw: dict) -> Config:
     """Dict (YAML/wizard) → Config. Key asing diabaikan (forward-compat)."""
     known = {f.name for f in fields(Config)}
     return Config(**{k: v for k, v in raw.items() if k in known})
+
+
+def save_config_updates(updates: dict,
+                        explicit_path: Path | str | None = None) -> None:
+    """Merge updates ke config.yaml lalu tulis (buat /model /key /base).
+
+    Dict di-merge per-key (provider_keys lama dipertahankan), sisanya
+    replace. Raise OSError kalau gagal tulis — caller yang berpesan.
+    """
+    path = resolve_config_path(explicit_path)
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
+    for k, v in updates.items():
+        if isinstance(v, dict) and isinstance(raw.get(k), dict):
+            merged = dict(raw[k])
+            for mk, mv in v.items():
+                # "" / None = hapus key (dipakai `/base -`).
+                if mv is None or (isinstance(mv, str) and not mv.strip()):
+                    merged.pop(mk, None)
+                else:
+                    merged[mk] = mv
+            raw[k] = merged
+        else:
+            raw[k] = v
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(raw, sort_keys=False, allow_unicode=True),
+                    encoding="utf-8")
 
 
 def load_config(explicit_path: Path | str | None = None) -> Config:

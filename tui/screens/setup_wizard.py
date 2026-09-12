@@ -511,6 +511,13 @@ class SetupWizard(Screen):
         base = self.api_base.strip() or self.provider.default_base
         if base.strip():
             data["api_base"] = base.strip()
+        # Key/base per-provider (#31): ganti model lintas provider tetap
+        # pakai kredensial yang benar (tidak 401 diam-diam).
+        prov = self.provider.id if self.provider.id != "custom" else ""
+        if prov and self.api_key.strip():
+            data["provider_keys"] = {prov: self.api_key.strip()}
+        if self.provider.id == "custom" and base.strip():
+            data["provider_bases"] = {"custom": base.strip()}
         if self.search_provider != "skip":
             data["search_provider"] = self.search_provider
             data["search_api_key"] = self.search_api_key
