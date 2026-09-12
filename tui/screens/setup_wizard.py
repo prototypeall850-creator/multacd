@@ -53,12 +53,12 @@ PROVIDERS: tuple[Provider, ...] = (
 )
 
 SEARCH_OPTIONS: tuple[tuple[str, str], ...] = (
-    ("tavily", "Tavily (bagus, extra pip)"),
-    ("exa", "Exa (extra pip)"),
+    ("tavily", "Tavily (rekomendasi research)"),
+    ("exa", "Exa"),
     ("brave", "Brave Search"),
     ("serpapi", "SerpAPI"),
     ("duckduckgo", "DuckDuckGo (gratis)"),
-    ("skip", "Skip (= DuckDuckGo)"),
+    ("skip", "Skip (nanti saja)"),
 )
 
 
@@ -286,14 +286,9 @@ class SetupWizard(Screen):
             self._hint("Atas/Bawah pilih · Enter lanjut · Esc kembali")
         elif self.step == 7:
             need_key = (self.search_provider not in ("skip", "duckduckgo"))
-            extra = ""
-            if self.search_provider in ("tavily", "exa"):
-                extra = (f"\nButuh paket extra: pip install "
-                         f"\"multacd[{self.search_provider}]\" "
-                         "(di Termux tidak bisa — pilih Brave/DDG).")
             await body.mount(Static(
                 f"Search key ({self.search_provider}) — "
-                f"kosongkan untuk lewati.{extra}"))
+                "kosongkan untuk lewati."))
             if need_key:
                 await body.mount(Input(placeholder="search api key",
                                        password=True, id="wiz-input"))
@@ -518,7 +513,10 @@ class SetupWizard(Screen):
             data["provider_keys"] = {prov: self.api_key.strip()}
         if self.provider.id == "custom" and base.strip():
             data["provider_bases"] = {"custom": base.strip()}
-        if self.search_provider != "skip":
+        if self.search_provider == "skip":
+            # Skip = jalan dulu pakai yang gratis (upgrade belakangan).
+            data["search_provider"] = "duckduckgo"
+        else:
             data["search_provider"] = self.search_provider
             data["search_api_key"] = self.search_api_key
         if self.telegram_enabled and (self.tg_token or self.tg_admin_id):

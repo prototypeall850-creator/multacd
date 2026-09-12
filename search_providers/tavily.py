@@ -1,16 +1,22 @@
 """Tavily provider — search engine yang dirancang buat AI agent.
 
+Native httpx (tanpa SDK): REST POST api.tavily.com/search. Murni wheel,
+jalan di Termux — tidak perlu extra apa pun, cukup search_api_key.
+
 Keunggulan: response sudah include konten penuh → tidak perlu scrape lagi.
 Set content langsung dari response, scraped=True.
-
-Butuh: pip install "multacd[tavily]" + search_api_key "tvly-xxxx".
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+import httpx
+
 from search_providers.base import SearchProvider, SearchProviderError, SearchResult
+
+_ENDPOINT = "https://api.tavily.com/search"
+_TIMEOUT = 30.0
 
 
 def _parse_response(data: dict[str, Any]) -> list[SearchResult]:
@@ -42,17 +48,30 @@ class TavilyProvider(SearchProvider):
                 "Tavily butuh search_api_key. Isi `search_api_key` di "
                 "~/.multacd/config.yaml (key tvly-xxxx).")
         try:
-            from tavily import TavilyClient
-        except ImportError as e:
+            with httpx.Client(timeout=_TIMEOUT) as client:
+                resp = client.post(_ENDPOINT, json={
+                    "api_key": self._api_key,
+                    "query": query,
+                    "max_results": max(1, min(num_results, 20)),
+                    "include_answer": False,
+                })
+        except httpx.TimeoutException as e:
+            raise SearchProviderError(f"Tavily timeout: {e}") from e
+        except httpx.HTTPError as e:
+            raise SearchProviderError(f"Tavily koneksi gagal: {e}") from e
+        if resp.status_code in (401, 403):
             raise SearchProviderError(
-                "SDK tavily-python belum install. Jalankan: pip install \"multacd[tavily]\""
-            ) from e
+                "Tavily menolak search_api_key (401/403). Cek key tvly-xxxx.")
+        if resp.status_code == 429:
+            raise SearchProviderError(
+                "Rate limit dari Tavily. Tunggu beberapa saat lalu coba lagi.")
         try:
-            client = TavilyClient(api_key=self._api_key)
-            data = client.search(query, max_results=num_results,
-                                 include_answer=False)
+            resp.raise_for_status()
+            data = resp.json()
         except Exception as e:
-            raise SearchProviderError(f"Tavily search gagal: {e}") from e
+            raise SearchProviderError(f"Tavily response rusak: {e}") from e
+        if not isinstance(data, dict):
+            raise SearchProviderError("Tavily response bukan object JSON.")
         return _parse_response(data)[:num_results]
 
 

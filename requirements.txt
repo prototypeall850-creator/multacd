@@ -5,8 +5,7 @@ ruff>=0.4.0
 pytest>=8.0.0
 beautifulsoup4>=4.12.0
 markdownify>=0.12.0
-# OPSIONAL (rantai Rust tanpa wheel Android — jangan masuk default):
-#   exa-py (-> openai -> jiter) ; tavily-python (-> tiktoken)
-#   pip install "multacd[exa]" / pip install "multacd[tavily]"
+# Search 100% native httpx (tavily/exa/brave/serpapi/duckduckgo) —
+# tanpa SDK, tanpa Rust, jalan di Termux.
 python-telegram-bot>=21.0
 APScheduler>=3.10.0,<4

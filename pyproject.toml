@@ -35,18 +35,6 @@ dependencies = [
     "python-telegram-bot>=21.0",
     "APScheduler>=3.10.0,<4",
 ]
-
-[project.optional-dependencies]
-# Search ekstra — rantainya bawa Rust TANPA wheel Android:
-#   exa-py -> openai -> jiter ; tavily-python -> tiktoken.
-# Default install wajib murni-wheel (Termux). Butuh provider ini:
-#   pip install "multacd[exa]" / pip install "multacd[tavily]"
-exa = [
-    "exa-py>=1.0.0",
-]
-tavily = [
-    "tavily-python>=0.3.0",
-]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov",

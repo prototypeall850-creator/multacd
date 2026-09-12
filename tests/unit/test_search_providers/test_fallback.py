@@ -35,12 +35,11 @@ def test_direct_no_fallback(monkeypatch):
 
 
 def test_sdk_missing_falls_back(monkeypatch):
-    """Tavily tanpa SDK → DDG mock, notice jujur."""
+    """Tavily gangguan operasional (rate limit/timeout) → DDG + notice."""
     def _boom(cfg):
         class _P:
             def search(self, q, num_results=5):
-                raise SearchProviderError(
-                    'SDK tavily-python belum install. Jalankan: pip install "multacd[tavily]"')
+                raise SearchProviderError("Rate limit dari Tavily")
         return _P()
     monkeypatch.setattr(search_providers, "get_provider", _boom)
     monkeypatch.setattr(
@@ -52,24 +51,24 @@ def test_sdk_missing_falls_back(monkeypatch):
     assert used == "duckduckgo" and "tavily" in notice and "DuckDuckGo" in notice
 
 
-def test_non_sdk_error_reraised(monkeypatch):
-    """Key salah / network → JANGAN fallback (jangan sembunyikan)."""
+def test_key_error_no_fallback(monkeypatch):
+    """Key kosong/salah → fail jelas, JANGAN fallback (jangan sembunyikan)."""
     def _bad(cfg):
         class _P:
             def search(self, q, num_results=5):
-                raise SearchProviderError("Rate limit 429")
+                raise SearchProviderError("Tavily butuh search_api_key")
         return _P()
     monkeypatch.setattr(search_providers, "get_provider", _bad)
-    with pytest.raises(SearchProviderError, match="Rate limit"):
-        search_with_fallback(_cfg("brave"), "x", 1)
+    with pytest.raises(SearchProviderError, match="search_api_key"):
+        search_with_fallback(_cfg("tavily"), "x", 1)
 
 
 def test_fallback_fails_reraises_original(monkeypatch):
-    """DDG ikut gagal → error asli (SDK), bukan error DDG."""
+    """DDG ikut gagal → error asli (operasional), bukan error DDG."""
     def _boom(cfg):
         class _P:
             def search(self, q, num_results=5):
-                raise SearchProviderError("SDK exa-py belum install")
+                raise SearchProviderError("Exa timeout: tempo habis")
         return _P()
     monkeypatch.setattr(search_providers, "get_provider", _boom)
     def _ddg_boom(api_key=""):
@@ -78,5 +77,5 @@ def test_fallback_fails_reraises_original(monkeypatch):
                 raise SearchProviderError("DDG timeout")
         return _D()
     monkeypatch.setattr(search_providers, "DuckDuckGoProvider", _ddg_boom)
-    with pytest.raises(SearchProviderError, match="belum install"):
+    with pytest.raises(SearchProviderError, match="tempo habis"):
         search_with_fallback(_cfg("exa"), "x", 1)

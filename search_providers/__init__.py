@@ -41,35 +41,38 @@ def get_provider(config: Config) -> SearchProvider:
     return cls(api_key=config.search_api_key or "")
 
 
-SDK_MISSING_MARKER = "belum install"
+# Error yang TIDAK boleh di-fallback (konfigurasi salah — user harus betulkan,
+# bukan disembunyikan di balik DuckDuckGo): key kosong/salah, auth, asing.
+NO_FALLBACK_MARKERS = ("search_api_key", "api_key", "ditolak", "401", "403",
+                       "tidak dikenal", "tidak valid")
 
 
 def search_with_fallback(config: Config, query: str,
                          num_results: int = 5,
                          ) -> tuple[list[SearchResult], str, str]:
-    """Cari via provider config; fallback DuckDuckGo kalau SDK-nya hilang.
+    """Cari via provider config; fallback DuckDuckGo kalau operasional gagal.
 
-    Tavily/Exa jadi extra opsional (rantai Rust tanpa wheel Android —
-    di Termux mustahil install). Tanpa fallback, riset mati total di HP.
-    Issue #30.
+    Provider native semua (tanpa SDK) — fallback untuk gangguan operasional
+    (rate limit, timeout, 5xx). Salah konfigurasi (key kosong/salah, auth,
+    provider asing) tetap error jelas, tidak disembunyikan. Issue #30.
 
     Return (results, used_provider, notice). notice "" kalau langsung.
-    Error non-SDK (key salah, network, provider asing) di-raise apa adanya
-    — jangan disembunyikan. Fallback ikut gagal → error asli di-raise.
+    Fallback ikut gagal → error asli di-raise.
     """
     provider = get_provider(config)  # lookup global → mock-able di test
     name = (getattr(config, "search_provider", "") or "").lower().strip()
     try:
         return provider.search(query, num_results=num_results), name, ""
     except Exception as first:
-        if SDK_MISSING_MARKER not in str(first):
+        # `first` dihapus Python di akhir blok except — salin dulu.
+        err = first
+        if any(m in str(err) for m in NO_FALLBACK_MARKERS):
             raise
-        sdk_err = first
     try:
         results = DuckDuckGoProvider(api_key="").search(
             query, num_results=num_results)
     except Exception:
-        raise sdk_err from None
-    notice = (f"`{name}` tak bisa dipakai di sini (SDK belum install) — "
+        raise err from None
+    notice = (f"`{name}` lagi gangguan ({type(err).__name__}) — "
               "hasil di bawah dari DuckDuckGo gratis.")
     return results, "duckduckgo", notice

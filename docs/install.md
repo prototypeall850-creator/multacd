@@ -21,8 +21,8 @@ multacd
 ```
 
 > Pin beta exact TANPA `--pre` (`--pre` bocor ke semua dependensi).
-> Dependensi default murni wheel (tanpa Rust). Opsional:
-> `pip install "multacd[exa]"` / `"multacd[tavily]"` (butuh Rust, lewati di HP).
+> Search (tavily/exa/brave/serpapi/duckduckgo) native httpx — tanpa SDK,
+> tanpa Rust, jalan di HP. Cukup isi `search_api_key` (gratis: duckduckgo).
 
 ## Windows (PowerShell)
 
