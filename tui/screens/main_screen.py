@@ -24,6 +24,7 @@ from core.agent_loop import (
 )
 from core.codebase import get_git_summary
 from core.research.bus import set_research_sink
+from core.session_state import AgentStatus, SessionState, reduce_event
 from tui.widgets.chat_panel import ChatPanel
 from tui.widgets.confirm_dialog import AskDialog, ContinueDialog
 from tui.widgets.diff_viewer import DiffViewer
@@ -134,13 +135,21 @@ class MainScreen(Screen):
 
     def __init__(self) -> None:
         super().__init__()
-        # NOTE: jangan pakai nama `_running` — itu atribut internal
-        # Textual MessagePump (dioverwrite framework saat pump start).
-        self._turn_running = False
-        self._tools_run = 0  # counter sesi buat info panel
-        self._sess_prompt = 0  # token resmi provider (0 = belum ada laporan)
-        self._sess_completion = 0
-        self._sess_cost = 0.0  # USD est (tabel harga lokal ala OpenCode)
+        # Satu sumber kebenaran status agent (R3). Dulu 5 field tersebar
+        # (_turn_running/_tools_run/_sess_*) — sekarang SessionState.
+        self.session = SessionState()
+
+    @property
+    def _turn_running(self) -> bool:
+        """Kompat: tui/app.py quit-guard baca atribut ini."""
+        return self.session.busy
+
+    @_turn_running.setter
+    def _turn_running(self, value: bool) -> None:
+        if value:
+            self.session.begin_turn()
+        else:
+            self.session.end_turn()
 
     def compose(self) -> ComposeResult:
         yield StatusBar()
@@ -272,12 +281,12 @@ class MainScreen(Screen):
         try:
             chars = sum(len(str(m.get("content", "")))
                         for m in self.app.context.get_messages())
-            real_total = self._sess_prompt + self._sess_completion
+            real_total = self.session.prompt_tokens + self.session.completion_tokens
             # Token resmi kalau provider melapor; kalau tidak, heuristik ~.
             # Cost: angka resmi kalau >0, else estimasi ~, else — (lokal).
             tokens_s = (f"{real_total:,}".replace(",", ".") if real_total
                         else f"~{estimate_tokens(chars):,}".replace(",", "."))
-            cost_s = (f"${self._sess_cost:.3f} est" if self._sess_cost > 0
+            cost_s = (f"${self.session.cost_usd:.3f} est" if self.session.cost_usd > 0
                       else "—")
             git = self.app.git_summary
             git_s = "—"
@@ -292,7 +301,7 @@ class MainScreen(Screen):
                 "tokens": tokens_s,
                 "cost": cost_s,
                 "messages": len(self.app.context),
-                "tools": self._tools_run,
+                "tools": self.session.tool_count,
                 "model": self.app.cfg.model,
             }
             if data["mode"] == "research":
@@ -396,7 +405,7 @@ class MainScreen(Screen):
             event.stop()
 
     def _submit(self, text: str) -> None:
-        if self._turn_running:
+        if self.session.busy:
             return  # abaikan submit ganda saat agent berpikir
         if not text.strip():
             return
@@ -418,7 +427,7 @@ class MainScreen(Screen):
             return
         # /connect [provider] → sambung provider (dialog key/base, TUI-local).
         if parts and parts[0].lower() == "/connect":
-            self._turn_running = True
+            self.session.begin_turn()
             self.run_worker(self._connect_flow(
                 parts[1] if len(parts) > 1 else ""))
             return
@@ -428,7 +437,7 @@ class MainScreen(Screen):
             if arg:
                 from tui.widgets.model_selector import for_provider
                 if for_provider(arg, self.app.cfg.model) is None:
-                    self._turn_running = True
+                    self.session.begin_turn()
                     self.run_worker(self._connect_note(
                         f"Provider `{arg}` tak dikenal. /connect tanpa arg "
                         "buat daftar."))
@@ -564,7 +573,7 @@ class MainScreen(Screen):
         finally:
             with suppress(Exception):
                 self.query_one(InputBar).focus()
-            self._turn_running = False
+            self.session.end_turn()
 
     async def _connect_flow(self, arg: str) -> None:
         """Sambung provider via dialog (TUI-local, tanpa LLM).
@@ -681,7 +690,7 @@ class MainScreen(Screen):
             self._sync_mode_ui()
             with suppress(Exception):
                 inbar.focus()
-            self._turn_running = False
+            self.session.end_turn()
 
     async def _run_turn(self, text: str) -> None:
         chat = self.query_one(ChatPanel)
@@ -727,24 +736,25 @@ class MainScreen(Screen):
                 ):
                     first = False
                     if isinstance(event, AgentText):
+                        reduce_event(self.session, event)
                         await chat.append_assistant_text(event.delta)
                     elif isinstance(event, AgentToolStart):
+                        reduce_event(self.session, event)
                         think.show(event.name)
                         await chat.add_tool_row(event.call_id, event.name,
                                                 event.params)
                     elif isinstance(event, AgentToolDone):
+                        reduce_event(self.session, event)
                         think.show("thinking")
-                        self._tools_run += 1
                         await chat.drop_live_output(event.call_id)
                         await chat.update_tool_row(event.call_id, event.name,
                                                    event.success, event.result)
                     elif isinstance(event, AgentDone):
-                        pass  # teks sudah ter-stream penuh
+                        reduce_event(self.session, event)  # teks sudah ter-stream penuh
                     elif isinstance(event, AgentUsage):
-                        self._sess_prompt += event.prompt_tokens
-                        self._sess_completion += event.completion_tokens
-                        self._sess_cost += event.cost_usd
+                        reduce_event(self.session, event)
                     elif isinstance(event, AgentContinue):
+                        reduce_event(self.session, event)
                         choice = await self.app.push_screen(
                             ContinueDialog(event.summary, event.limit),
                             wait_for_dismiss=True)
@@ -759,6 +769,7 @@ class MainScreen(Screen):
                                 "Berhenti di batas iterasi — ketik pesan buat lanjut manual.")
                         break
                     elif isinstance(event, AgentError):
+                        reduce_event(self.session, event)
                         await chat.add_error(event.message)
         finally:
             set_research_sink(None)
@@ -767,7 +778,7 @@ class MainScreen(Screen):
             bar.set_status("idle")
             inbar.set_busy(False)
             inbar.focus()
-            self._turn_running = False
+            self.session.end_turn()
 
     def _apply_research_event(self, ev: dict[str, Any]) -> None:
         """Terapkan satu event orchestrator ke SourcesPanel (jalan di app loop)."""
@@ -805,6 +816,7 @@ class MainScreen(Screen):
         perm = self.query_one(PermissionPopup)
         bar.set_status("waiting")
         think.hide()  # permission bar gantikan thinking bar sementara
+        self.session.status = AgentStatus.WAITING_PERMISSION
         try:
             # #4: preview diff otomatis sebelum approve commit.
             if tool_name == "git_commit":
@@ -822,6 +834,7 @@ class MainScreen(Screen):
                 return f"edit:{new_msg}"
             return ans
         finally:
+            self.session.status = AgentStatus.EXECUTING_TOOL
             bar.set_status("thinking")
             think.show("thinking")
 

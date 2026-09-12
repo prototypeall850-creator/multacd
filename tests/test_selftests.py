@@ -27,6 +27,7 @@ _ISOLATED_HOME = tempfile.mkdtemp(prefix="multacd-pytest-home-")
 SELF_TEST_MODULES = [
     "core.agent_loop",
     "core.agent_events",
+    "core.session_state",
     "core.llm_client",
     "core.permissions",
     "core.mode_manager",
