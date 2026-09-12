@@ -8,9 +8,11 @@ from typing import Any
 
 from rich.markdown import Markdown as RichMarkdown
 from rich.panel import Panel
+from rich.text import Text
 from textual.containers import VerticalScroll
 from textual.widgets import Markdown, Static
 
+from tui.markup_safe import tx_escape as escape
 from tui.widgets.tool_activity import ToolActivity
 
 
@@ -54,7 +56,7 @@ class ChatPanel(VerticalScroll):
         tip = self.SPLASH_TIPS[0]
         await self.mount(Static(f"[bold]{_icons.icon('app')}  m u l t a c d[/bold]",
                                 classes="splash-title"))
-        await self.mount(Static(f"{mode} · {model} · v{version}",
+        await self.mount(Static(f"{escape(mode)} · {escape(model)} · v{version}",
                                 classes="splash-hint"))
         await self.mount(Static(f"{_icons.icon('bullet')}  Tip  {tip}",
                                 classes="splash-hint"))
@@ -69,17 +71,20 @@ class ChatPanel(VerticalScroll):
         self._live: dict[str, tuple[Static, list[str]]] = {}
 
     async def add_user(self, text: str) -> None:
-        await self.mount(Static(Panel(text, title="You", border_style="blue")))
+        # Panel body dibungkus Text: user bisa ketik `[...]` seenaknya
+        # tanpa dianggap markup (issue #29).
+        await self.mount(Static(Panel(Text(text), title="You",
+                                      border_style="blue")))
         self.scroll_end(animate=False)
 
     async def add_info(self, text: str) -> None:
-        await self.mount(Static(f"[dim]{text}[/dim]"))
+        await self.mount(Static(f"[dim]{escape(text)}[/dim]"))
         self.scroll_end(animate=False)
 
     async def add_error(self, text: str) -> None:
         from tui import icons as _icons
         await self.mount(Static(
-            Panel(text, title=f"{_icons.icon('error')} error",
+            Panel(Text(text), title=f"{_icons.icon('error')} error",
                   border_style="red")))
         self.scroll_end(animate=False)
 
@@ -121,7 +126,8 @@ class ChatPanel(VerticalScroll):
         widget, lines = entry
         lines.append(line[-200:])  # baris super panjang dipotong
         del lines[:-self.LIVE_LINES]
-        widget.update("\n".join(lines))
+        # Output tool mentah (bisa berisi `[...]`) → Text, bukan markup.
+        widget.update(Text("\n".join(lines)))
         self.scroll_end(animate=False)
 
     async def add_diff_preview(self, workdir: str = ".") -> None:

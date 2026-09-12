@@ -20,6 +20,7 @@ from typing import Any
 
 import httpx
 import yaml
+from rich.text import Text
 from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
@@ -331,7 +332,7 @@ class SetupWizard(Screen):
                 f"Telegram  : {tg_on}",
                 f"Config    : {self.save_path}", "",
             ]
-            await body.mount(Static("\n".join(lines)))
+            await body.mount(Static(Text("\n".join(lines))))
             await body.mount(Button("Simpan & Mulai [Enter]", id="wiz-save"))
             await body.mount(Button("Ulangi Setup", id="wiz-restart"))
             self._hint("Enter simpan · Ctrl+C batal")

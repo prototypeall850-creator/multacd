@@ -20,6 +20,8 @@ from pathlib import Path
 from textual.containers import Vertical
 from textual.widgets import Label, ListItem, ListView, Static
 
+from tui.markup_safe import tx_escape as escape
+
 # Katalog kurasi (provider → [(model, tag)]). Tag: "" | "Free" | "Local".
 # Bukan fetch live — selector harus instan walau offline; model baru
 # tetap bisa diketik manual `/model <nama>`.
@@ -266,7 +268,7 @@ class ModelSelector(Vertical):
             return
         with suppress(Exception):
             self.query_one("#model-query", Static).update(
-                f"Search: {self._query or '...'}  (ctrl+f favorite)")
+                f"Search: {escape(self._query) or '...'}  (ctrl+f favorite)")
         lst.clear()
         for row in self._rows:
             if row[0] == "head":
@@ -275,7 +277,8 @@ class ModelSelector(Vertical):
                 _, provider, name, tag = row
                 star = "*" if name in self._favorites else " "
                 tag_s = f"  [{tag}]" if tag else ""
-                item = ListItem(Label(f"{star} {name}  ({provider}){tag_s}"))
+                item = ListItem(Label(
+                    f"{star} {escape(name)}  ({escape(provider)}){tag_s}"))
             lst.append(item)
         self._highlight()
 

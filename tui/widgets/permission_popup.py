@@ -27,6 +27,7 @@ from textual.widgets import Button, Static
 
 from core.permissions import NO_SESSION_APPROVAL, RISKY_TOOLS  # single source of truth
 from tui import icons
+from tui.markup_safe import tx_escape as escape
 
 
 def target_of(params: dict[str, Any]) -> str:
@@ -38,20 +39,21 @@ def target_of(params: dict[str, Any]) -> str:
 
 
 def prompt_of(tool_name: str, params: dict[str, Any]) -> str:
-    """Baris prompt (markup). Pure function."""
+    """Baris prompt (markup). Nilai dinamis di-escape (issue #29). Pure function."""
     risky = tool_name in RISKY_TOOLS
     pre = f"[bold red]{icons.icon('warning')} [/]" if risky else ""
     name_style = "bold red" if risky else "bold cyan"
+    name = escape(tool_name)
     if tool_name == "git_commit":  # #4: pesan commit ikut tampil
         first = str(params.get("message", "")).strip().splitlines()
-        msg = first[0][:60] if first else "(tanpa pesan)"
-        return f"[{name_style}]{tool_name}[/]  [dim]\"{msg}\"[/]"
+        msg = escape(first[0][:60] if first else "(tanpa pesan)")
+        return f"[{name_style}]{name}[/]  [dim]\"{msg}\"[/]"
     if tool_name == "git_push":  # #4: target branch ikut tampil
-        br = str(params.get("branch", "") or "(aktif)")
+        br = escape(str(params.get("branch", "") or "(aktif)"))
         prot = "  [red](protected)[/]" if _is_protected_push(params) else ""
-        return f"{pre}[{name_style}]{tool_name}[/]  [dim]{br}[/]{prot}"
+        return f"{pre}[{name_style}]{name}[/]  [dim]{br}[/]{prot}"
     post = "  [red]permanent[/]" if risky else ""
-    return f"{pre}[{name_style}]{tool_name}[/]  [dim]{target_of(params)}[/]{post}"
+    return f"{pre}[{name_style}]{name}[/]  [dim]{escape(target_of(params))}[/]{post}"
 
 
 def _is_protected_push(params: dict[str, Any]) -> bool:
@@ -236,4 +238,10 @@ if __name__ == "__main__":
     assert bar.answer_key("e")
     bar._extra = "branch"
     assert bar.answer_key("b")
-    print("✅ permission_popup self-test OK (prompt + keys + extra)")
+    # #29: target/pesan berisi bracket → prompt tetap valid markup.
+    from textual.content import Content as _Content
+    nasty: dict[str, Any] = {"command": 'ls [a-z]* [x=y="list_dir", z]'}
+    _Content.from_markup(prompt_of("bash", nasty))
+    _Content.from_markup(prompt_of(
+        "git_commit", {"message": 'feat: [x=y="a", b] ok'}))
+    print("✅ permission_popup self-test OK (prompt + keys + extra + markup)")

@@ -12,6 +12,8 @@ from textual.containers import Container
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Static
 
+from tui.markup_safe import tx_escape as escape
+
 
 class AskDialog(ModalScreen[str]):
     """Popup pertanyaan agent → user. Return jawaban (string)."""
@@ -41,7 +43,7 @@ class AskDialog(ModalScreen[str]):
     def compose(self) -> ComposeResult:
         from tui import icons as _icons
         with Container():
-            yield Static(f"{_icons.icon('arrow')} {self.question}")
+            yield Static(f"{_icons.icon('arrow')} {escape(self.question)}")
             yield Input(placeholder="ketik jawaban lalu Enter", id="ask-input",
                         value=self.initial)
 
@@ -85,7 +87,7 @@ class ContinueDialog(ModalScreen[str]):
         from textual.containers import Horizontal
         with Container():
             yield Static(f"[bold]Batas {self.limit} iterasi tercapai[/]\n"
-                         f"{self.summary}")
+                         f"{escape(self.summary)}")
             with Horizontal():
                 yield Button("Lanjut (Enter)", id="cont-yes",
                              variant="success")

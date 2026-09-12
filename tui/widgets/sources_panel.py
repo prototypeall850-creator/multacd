@@ -18,6 +18,8 @@ from textual.containers import Vertical
 from textual.message import Message
 from textual.widgets import Button, Label, ListItem, ListView, Static
 
+from tui.markup_safe import tx_escape as escape
+
 STATUS_ICONS = {
     "queued": ".",
     "searching": ">",
@@ -111,7 +113,7 @@ class SourcesPanel(Vertical):
     def set_notice(self, text: str) -> None:
         self._notice = text
         with suppress(Exception):
-            self.query_one("#sources-notice", Static).update(text)
+            self.query_one("#sources-notice", Static).update(escape(text))
 
     def set_export_visible(self, visible: bool) -> None:
         with suppress(Exception):
@@ -174,7 +176,8 @@ class SourcesPanel(Vertical):
 
     def _label(self, it: dict[str, Any]) -> str:
         icon = STATUS_ICONS.get(it["status"], "?")
-        return f"{icon} {it['title']} ({_domain(it['url'])})"
+        return (f"{icon} {escape(it['title'])} "
+                f"({escape(_domain(it['url']))})")
 
     def _rebuild_list(self) -> None:
         try:

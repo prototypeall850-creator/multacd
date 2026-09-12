@@ -14,6 +14,7 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import Any
 
+from rich.text import Text
 from textual.containers import Vertical
 from textual.widgets import Static
 
@@ -62,7 +63,7 @@ class InfoPanel(Vertical):
         self._data = dict(data)
         with suppress(Exception):
             self.query_one("#info-body", Static).update(
-                render_snapshot(self._data))
+                Text(render_snapshot(self._data)))
 
 
 if __name__ == "__main__":

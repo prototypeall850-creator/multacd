@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 
+from rich.text import Text
 from textual.widgets import Static
 
 MAX_DOTS = 7
@@ -96,8 +97,9 @@ class ThinkingBar(Static):
         self._paint()
 
     def _paint(self) -> None:
+        # Plain text (nama tool plugin bisa berisi apa saja) → Text.
         with suppress(Exception):  # belum mount saat show() dari test
-            self.update(dotted(self._base, self._dots))
+            self.update(Text(dotted(self._base, self._dots)))
 
 
 if __name__ == "__main__":

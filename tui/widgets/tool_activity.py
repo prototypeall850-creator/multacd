@@ -16,11 +16,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from rich.text import Text
 from textual import events
 from textual.containers import Vertical
 from textual.widgets import Static
 
 from tui import icons
+from tui.markup_safe import tx_escape as escape
 
 MAX_DETAIL_CHARS = 1500
 MAX_DETAIL_LINES = 20
@@ -67,6 +69,33 @@ def truncate_detail(detail: str) -> str:
     elif len(detail.splitlines()) > MAX_DETAIL_LINES:
         text += "\n…(dipotong)"
     return text
+
+
+def head_markup(name: str, target: str, done: bool, success: bool) -> str:
+    """Header 1 baris (markup). Pure function — gampang dites.
+
+    Nama/target di-escape: path/command user bisa berisi `[...]` yang
+    bikin Textual MarkupError kalau mentah (issue #29).
+    """
+    mark = icons.icon("expand")
+    name, target = escape(name), escape(target)
+    if not done:
+        status = f" [blue]{icons.icon('pending')}[/]"
+        return (f"[blue]{icons.icon('running')} {name}[/]"
+                f"  [dim]{target}[/]{status}  {mark}")
+    if success:
+        status = f" [green]{icons.icon('success')}[/]"
+        return (f"[green]{name}[/]  [dim]{target}[/]{status}  {mark}")
+    status = f" [red]{icons.icon('error')}[/]"
+    return (f"[red]{name}[/]  [dim]{target}[/]{status}  {mark}")
+
+
+def body_text(summary: str, detail: str) -> Text:
+    """Body expanded sebagai Rich Text (hasil tool mentah, tanpa markup)."""
+    body = summary
+    if detail:
+        body += "\n─────\n" + truncate_detail(detail)
+    return Text(body or "(tidak ada detail)")
 
 
 class ToolActivity(Vertical):
@@ -121,38 +150,26 @@ class ToolActivity(Vertical):
 
     def _paint(self) -> None:
         if self._collapsed:
-            mark = icons.icon("expand")
-            if not self._done:
-                status = f" [blue]{icons.icon('pending')}[/]"
-                head = (f"[blue]{icons.icon('running')} {self._name}[/]"
-                        f"  [dim]{self._target}[/]{status}  {mark}")
-            elif self._success:
-                status = f" [green]{icons.icon('success')}[/]"
-                head = (f"[green]{self._name}[/]  [dim]{self._target}[/]"
-                        f"{status}  {mark}")
-            else:
-                status = f" [red]{icons.icon('error')}[/]"
-                head = (f"[red]{self._name}[/]  [dim]{self._target}[/]"
-                        f"{status}  {mark}")
             try:
-                self._head.update(head)
+                self._head.update(head_markup(
+                    self._name, self._target, self._done, self._success))
                 self._body.display = False
             except Exception:
                 pass
         else:
             try:
                 self._head.update(
-                    f"v {self._name}  {self._target}  {icons.icon('collapse')}")
-                body = self._summary
-                if self._detail:
-                    body += "\n─────\n" + truncate_detail(self._detail)
-                self._body.update(body or "(tidak ada detail)")
+                    f"v {escape(self._name)}  {escape(self._target)}  "
+                    f"{icons.icon('collapse')}")
+                self._body.update(body_text(self._summary, self._detail))
                 self._body.display = True
             except Exception:
                 pass
 
 
 if __name__ == "__main__":
+    from textual.content import Content as _Content
+
     assert target_of({"path": "a.py"}) == "a.py"
     assert target_of({}) == ""
     s, d = summarize({"success": True, "result": "Created (3)\nok", "error": None})
@@ -165,4 +182,10 @@ if __name__ == "__main__":
     assert (s, d) == ("", "")
     t = truncate_detail("\n".join(f"l{i}" for i in range(30)))
     assert len(t.splitlines()) == 21 and t.endswith("(dipotong)"), t[-20:]
-    print("✅ tool_activity self-test OK (summarize + truncate)")
+    # #29: nama/target berisi bracket → header tetap valid markup.
+    nasty = 'ls [a-z]* [x=y="list_dir", z]'
+    for _done, _ok in ((False, False), (True, True), (True, False)):
+        _Content.from_markup(head_markup("bash", nasty, _done, _ok))
+    _Content.from_markup(head_markup(nasty, nasty, True, True))
+    assert isinstance(body_text('[x=y="a", b]', "d"), Text)
+    print("✅ tool_activity self-test OK (summarize + truncate + markup)")

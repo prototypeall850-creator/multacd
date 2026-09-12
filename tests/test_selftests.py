@@ -49,6 +49,7 @@ SELF_TEST_MODULES = [
     "tools.research.export_research",
     "tui.icons",
     "tui.themes",
+    "tui.markup_safe",
     "tui.widgets.thinking_bar",
     "tui.widgets.permission_popup",
     "tui.widgets.tool_activity",

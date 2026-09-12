@@ -16,6 +16,7 @@ from textual.containers import Vertical
 from textual.widgets import Label, ListItem, ListView, Static
 
 from core.mode_manager import COMMANDS_WITH_ARGS, PALETTE_COMMANDS
+from tui.markup_safe import tx_escape as escape
 
 MATCH_STYLE = "#b4befe"  # Lavender — highlight bagian yang match
 
@@ -114,7 +115,8 @@ class SlashPalette(Vertical):
             return
         lst.clear()
         if not self._matches:
-            lst.append(ListItem(Label(f"(tidak ada yang cocok: /{self._needle})")))
+            lst.append(ListItem(Label(
+                f"(tidak ada yang cocok: /{escape(self._needle)})")))
             return
         for cmd, desc in self._matches:
             lst.append(ListItem(Label(render_item(cmd, desc, self._needle))))
