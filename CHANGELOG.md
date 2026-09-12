@@ -2,6 +2,13 @@
 
 Format: Keep a Changelog. Versi: Semantic Versioning.
 
+## [2.0.0b6] - 2026-09-12
+
+Beta v2 keenam — fix mode lupa ingatan (#26): system message di-refresh
+tiap turn dari composer (ala opencode: system disusun ulang tiap request).
+Ganti /code /research /personal sekarang beneran ganti persona yang dibaca
+LLM. Install: `pip install "multacd==2.0.0b6"`.
+
 ## [2.0.0b5] - 2026-09-12
 
 Beta v2 kelima — fix chat 2-turn 400 (#25): `add_assistant_tool_calls`
