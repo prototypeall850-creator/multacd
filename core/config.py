@@ -128,6 +128,12 @@ SCHEDULE_ACTIONS = ("briefing", "research")
 
 
 def _str(loc: str, v: object, errs: list[str], min_len: int = 0) -> str:
+    # YAML `key:` kosong → None. Field opsional (min_len=0) maafkan jadi "",
+    # field wajib tetap error tapi pesannya "wajib diisi", bukan "NoneType".
+    if v is None:
+        if min_len > 0:
+            errs.append(f"{loc}: wajib diisi (kosong)")
+        return ""
     if isinstance(v, bool) or not isinstance(v, (str, int, float)):
         errs.append(f"{loc}: harus teks, dapat {type(v).__name__}")
         return "" if isinstance(v, str) else str(v) if v is not None else ""
@@ -140,9 +146,9 @@ def _str(loc: str, v: object, errs: list[str], min_len: int = 0) -> str:
 def _int(loc: str, v: object, errs: list[str], gt: int | None = None,
          le: int | None = None) -> int:
     n: int | None = None
-    if isinstance(v, bool):
-        pass
-    elif isinstance(v, int):
+    if v is None or (isinstance(v, str) and not v.strip()):
+        n = 0  # key kosong = 0; lolos kalau opsional, error gt/le kalau wajib
+    elif isinstance(v, int) and not isinstance(v, bool):
         n = v
     elif isinstance(v, str) and v.strip().lstrip("+-").isdigit():
         n = int(v.strip())
@@ -159,9 +165,9 @@ def _int(loc: str, v: object, errs: list[str], gt: int | None = None,
 def _float(loc: str, v: object, errs: list[str], ge: float | None = None,
            le: float | None = None) -> float:
     f: float | None = None
-    if isinstance(v, bool):
-        pass
-    elif isinstance(v, (int, float)):
+    if v is None or (isinstance(v, str) and not v.strip()):
+        f = 0.0  # key kosong = 0.0; lolos kalau opsional, error ge/le kalau wajib
+    elif isinstance(v, (int, float)) and not isinstance(v, bool):
         f = float(v)
     elif isinstance(v, str):
         try:
@@ -179,6 +185,8 @@ def _float(loc: str, v: object, errs: list[str], ge: float | None = None,
 
 
 def _bool(loc: str, v: object, errs: list[str]) -> bool:
+    if v is None:
+        return False  # key kosong = default False (opsional)
     if isinstance(v, bool):
         return v
     if isinstance(v, str) and v.strip().lower() in (
@@ -190,6 +198,8 @@ def _bool(loc: str, v: object, errs: list[str]) -> bool:
 
 def _choice(loc: str, v: object, errs: list[str], options: tuple[str, ...],
             normalize: bool = False) -> str:
+    if v is None:
+        return options[0]  # key kosong = default opsi pertama
     s = v.lower().strip() if normalize and isinstance(v, str) else v
     if not isinstance(s, str) or s not in options:
         errs.append(f"{loc}: harus salah satu dari {', '.join(options)}, "
@@ -213,11 +223,14 @@ class TelegramConfig:
     allowed_users: list[int] = field(default_factory=list)
 
     def __post_init__(self) -> None:
+        # Normalisasi None sudah ditangani _str/_int (key kosong → default).
         errs: list[str] = []
         self.bot_token = _str("telegram.bot_token", self.bot_token, errs)
         self.admin_id = _int("telegram.admin_id", self.admin_id, errs)
         self.admin_username = _str("telegram.admin_username",
                                    self.admin_username, errs)
+        if self.allowed_users is None:
+            self.allowed_users = []  # `allowed_users:` kosong = []
         if not isinstance(self.allowed_users, list):
             errs.append(f"telegram.allowed_users: harus list, "
                         f"dapat {self.allowed_users!r}")
@@ -270,6 +283,9 @@ class BriefingConfig:
         self.news = _bool("briefing.news", self.news, errs)
         self.git_status = _bool("briefing.git_status", self.git_status, errs)
         self.weather = _bool("briefing.weather", self.weather, errs)
+        if self.news_topics is None:
+            self.news_topics = ["artificial intelligence",
+                                "software engineering"]
         if not isinstance(self.news_topics, list) or not all(
                 isinstance(t, str) for t in self.news_topics):
             errs.append("briefing.news_topics: harus list of string")
@@ -283,6 +299,8 @@ def _nested(loc: str, cls: type, v: object, errs: list[str]) -> object:
     """Dict → dataclass nested. Error nested digabung ke errs caller."""
     if isinstance(v, cls):
         return v
+    if v is None:
+        return cls()  # `telegram:` kosong tanpa isi = pakai default (nonaktif)
     if isinstance(v, dict):
         known = {f.name for f in fields(cls)}
         try:
@@ -398,6 +416,8 @@ class Config:
                                                errs)
         self.telegram = _nested("telegram", TelegramConfig,
                                 self.telegram, errs)
+        if self.schedules is None:
+            self.schedules = []  # `schedules:` kosong = []
         if not isinstance(self.schedules, list):
             errs.append(f"schedules: harus list, "
                         f"dapat {type(self.schedules).__name__}")

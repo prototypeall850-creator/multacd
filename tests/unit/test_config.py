@@ -55,3 +55,34 @@ def test_provider_normalized_case_insensitive():
 
     cfg = Config(model="m", api_key="k", search_provider=" Tavily ")
     assert cfg.search_provider == "tavily"
+
+
+def test_empty_optional_keys_forgiven(tmp_path: Path):
+    """YAML `key:` kosong → None. Blok opsional dimaafkan (bot nonaktif),
+    bukan error 'dapat NoneType'. Field wajib tetap ditolak ramah."""
+    from core.config import Config, ConfigError
+
+    # telegram kosong semua = bot nonaktif, lolos
+    c = Config(model="m", api_key="k", telegram={
+        "bot_token": None, "admin_id": None,
+        "admin_username": None, "allowed_users": None})
+    assert c.telegram.bot_token == "" and c.telegram.admin_id == 0
+    assert c.telegram.admin_username == "" and c.telegram.allowed_users == []
+    # `telegram:` tanpa isi + `schedules:` kosong
+    assert Config(model="m", api_key="k", telegram=None).telegram.bot_token == ""
+    assert Config(model="m", api_key="k", schedules=None).schedules == []
+    # file gaya user: admin_id di-comment → lolos, admin_id 0
+    p = tmp_path / "config.yaml"
+    p.write_text("model: m\napi_key: k\ntelegram:\n"
+                 "  bot_token: 123:abc\n  admin_username: dari\n",
+                 encoding="utf-8")
+    cfg = load_config(p)
+    assert cfg.telegram.admin_id == 0
+    assert cfg.telegram.admin_username == "dari"
+    # field wajib kosong tetap ditolak, pesan ramah (bukan NoneType)
+    with pytest.raises(ConfigError) as exc:
+        Config(model=None, api_key="k")
+    assert "model: wajib diisi (kosong)" in str(exc.value)
+    # angka wajib kosong tetap ditolak via gt
+    with pytest.raises(ConfigError):
+        Config(model="m", api_key="k", max_tokens=None)
