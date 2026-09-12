@@ -43,13 +43,20 @@ SCHEMA: dict[str, Any] = {
 
 
 def _run_coro(coro: Any) -> Any:
-    """Jalankan coroutine dari konteks sync ATAU dalam loop yang jalan."""
+    """Jalankan coroutine dari konteks sync ATAU dalam loop yang jalan.
+
+    Pool thread tidak mewarisi contextvars sendiri — context pemanggil
+    (termasuk research sink task ini, R6) di-copy eksplisit biar
+    on_event tetap sampai ke sesi yang benar.
+    """
     try:
         asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(coro)
+    import contextvars as _ctxvars
+    ctx = _ctxvars.copy_context()
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result()
+        return pool.submit(ctx.run, asyncio.run, coro).result()
 
 
 def quick_research(topic: str, language: str = "") -> dict[str, Any]:
