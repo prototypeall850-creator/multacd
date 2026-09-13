@@ -7,7 +7,7 @@ from tui.widgets.chat_panel import render_meta
 
 def test_meta_full_with_usage():
     m = render_meta("code", "groq/llama-3.3-70b", 4.7, 475)
-    assert m == "code · llama-3.3-70b · 4.7s · 101 tok/s", m
+    assert m == "code · llama-3.3-70b · 4.7s · 101.1 tok/s", m
 
 
 def test_meta_no_usage_no_fake_rate():

@@ -20,13 +20,13 @@ from tui.widgets.tool_activity import ToolActivity
 def render_meta(mode: str, model: str, secs: float, tok: int) -> str:
     """Meta kecil di bawah jawaban (TUI-R2 §7). Pure function.
 
-    `mode · model · 4.7s · 101 tok/s` — tok/s hanya kalau provider
+    `mode · model · 4.7s · 101.1 tok/s` — tok/s hanya kalau provider
     melapor usage (tok>0); jangan fake angka.
     """
     short = (model or "?").split("/")[-1][:28] or "?"
     base = f"{mode} · {short} · {max(0.0, secs):.1f}s"
     if tok > 0 and secs > 0:
-        base += f" · {tok / secs:.0f} tok/s"
+        base += f" · {tok / secs:.1f} tok/s"
     return base
 
 
@@ -48,7 +48,7 @@ class ChatPanel(VerticalScroll):
         height: auto;
     }
     ChatPanel .assistant-meta {
-        text-align: right;
+        text-align: left;
         color: $text-muted;
         margin: 0 0 1 0;
     }
@@ -68,6 +68,9 @@ class ChatPanel(VerticalScroll):
     }
     ChatPanel .live-out {
         color: $text-muted;
+        border-left: solid $primary;
+        background: $surface;
+        margin-left: 2;
         padding: 0 1;
         height: auto;
     }
