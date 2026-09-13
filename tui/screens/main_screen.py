@@ -35,6 +35,7 @@ from tui.widgets.info_panel import InfoPanel, estimate_tokens
 from tui.widgets.input_bar import InputBar, InputSubmitted
 from tui.widgets.model_selector import ModelSelector
 from tui.widgets.permission_popup import PermissionPopup
+from tui.widgets.provider_selector import ProviderSelector
 from tui.widgets.session_bar import SessionBar
 from tui.widgets.slash_palette import SlashPalette
 from tui.widgets.sources_panel import (
@@ -142,9 +143,23 @@ class MainScreen(Screen):
     }
     #model-selector {
         display: none;
+        position: absolute;
+        offset: 33% 4;
+        width: 60%;
         height: auto;
-        max-height: 16;
+        max-height: 60%;
         border: solid $accent;
+        background: $surface;
+        padding: 0 1;
+    }
+    #provider-selector {
+        display: none;
+        position: absolute;
+        offset: 33% 4;
+        width: 60%;
+        height: auto;
+        max-height: 60%;
+        border: solid $primary;
         background: $surface;
         padding: 0 1;
     }
@@ -212,6 +227,7 @@ class MainScreen(Screen):
         yield PermissionPopup()
         yield SlashPalette()
         yield ModelSelector()
+        yield ProviderSelector()
         yield Static("", id="input-meta")
         yield InputBar()
         yield FooterBar()
@@ -477,6 +493,10 @@ class MainScreen(Screen):
             needle = text[1:] if text.startswith("/") else text
             pal.refilter(needle.split(" ")[0].split("\n")[0])
             return
+        prov = self.query_one(ProviderSelector)
+        if prov.is_open:
+            prov.close()  # ketikan manual = batal pilih provider
+            return
         if pal.suppress_next:
             pal.suppress_next = False
             pal.close()
@@ -565,11 +585,14 @@ class MainScreen(Screen):
                     n = 1
             self.copy_assistant(n)
             return
-        # /connect [provider] → sambung provider (dialog key/base, TUI-local).
+        # /connect [provider] → selector popup (tanpa arg) atau langsung
+        # pasang key (dengan arg). TUI-local, tanpa LLM.
         if parts and parts[0].lower() == "/connect":
+            if len(parts) < 2 or not parts[1].strip():
+                self.provider_open()
+                return
             self.session.begin_turn()
-            self.run_worker(self._connect_flow(
-                parts[1] if len(parts) > 1 else ""))
+            self.run_worker(self._connect_flow(parts[1]))
             return
         # /models [provider] → selector model provider itu (TUI-local).
         if parts and parts[0].lower() == "/models":
@@ -621,8 +644,9 @@ class MainScreen(Screen):
         self.model_open()
 
     def model_open(self, provider: str | None = None) -> None:
-        """Buka selector; tutup palette kalau sedang terbuka."""
+        """Buka selector; tutup palette/provider kalau sedang terbuka."""
         self.query_one(SlashPalette).close()
+        self.query_one(ProviderSelector).close()
         self.query_one(ModelSelector).open(self.app.cfg.model,
                                            provider=provider)
         self.query_one(InputBar).focus()
@@ -640,6 +664,33 @@ class MainScreen(Screen):
         inbar.focus()
         if full:
             self._submit(f"/model {full}")
+
+    def provider_open(self) -> None:
+        """Buka selector provider (TUI-R4 §14); tutup popup lain."""
+        from core.providers import provider_id_of
+        from tui.screens.setup_wizard import PROVIDERS, SEARCH_OPTIONS
+        self.query_one(SlashPalette).close()
+        self.query_one(ModelSelector).close()
+        cfg = self.app.cfg
+        cur = provider_id_of(cfg.model)
+        llm = [(p.id, p.label,
+                (p.id in cfg.provider_keys
+                 or (p.id == cur and bool(cfg.api_key))))
+               for p in PROVIDERS]
+        search = [(sid, desc, cfg.search_provider == sid)
+                  for sid, desc in SEARCH_OPTIONS if sid != "skip"]
+        self.query_one(ProviderSelector).open(llm, search)
+        self.query_one(InputBar).focus()
+
+    def provider_select(self) -> None:
+        """Enter di selector: submit '/connect <id>' kayak ketik manual."""
+        sel = self.query_one(ProviderSelector)
+        picked = sel.selected
+        sel.close()
+        inbar = self.query_one(InputBar)
+        inbar.focus()
+        if picked is not None:
+            self._submit(f"/connect {picked[1]}")
 
     def model_favorite(self) -> None:
         """Ctrl+F di selector: tandai favorit."""
@@ -722,7 +773,6 @@ class MainScreen(Screen):
         (+ base bila perlu) lalu simpan. LLM dan search satu pintu.
         """
         from core.config import save_config_updates
-        from core.providers import provider_id_of
         from tui.screens.setup_wizard import PROVIDERS, SEARCH_OPTIONS
         from tui.widgets.confirm_dialog import AskDialog
         chat = self.query_one(ChatPanel)
@@ -733,26 +783,6 @@ class MainScreen(Screen):
             llm_ids = [p.id for p in PROVIDERS]
             search_ids = [sid for sid, _ in SEARCH_OPTIONS
                           if sid != "skip"]
-            if not arg.strip():
-                cur = provider_id_of(cfg.model)
-                lines = ["Provider LLM:"]
-                for p in PROVIDERS:
-                    if p.id in cfg.provider_keys:
-                        st = "connected"
-                    elif p.id == cur and cfg.api_key:
-                        st = "connected (top-level)"
-                    else:
-                        st = "belum"
-                    lines.append(f"  {p.id} — {st}")
-                lines.append("Provider search:")
-                for sid, desc in SEARCH_OPTIONS:
-                    if sid == "skip":
-                        continue
-                    mark = "aktif" if cfg.search_provider == sid else "—"
-                    lines.append(f"  {sid} — {mark} ({desc})")
-                lines.append("Pakai: /connect <id> · /models <id>")
-                await chat.add_info("\n".join(lines))
-                return
             pid = arg.strip().lower()
             if pid in llm_ids:
                 label = next(p.label for p in PROVIDERS if p.id == pid)

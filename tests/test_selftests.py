@@ -59,6 +59,7 @@ SELF_TEST_MODULES = [
     "tui.widgets.session_bar",
     "tui.widgets.context_sidebar",
     "tui.widgets.footer_bar",
+    "tui.widgets.provider_selector",
     "tui.widgets.permission_popup",
     "tui.widgets.tool_activity",
     "tui.widgets.slash_palette",
