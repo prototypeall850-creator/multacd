@@ -19,8 +19,9 @@ from textual.widgets import Label, ListItem, ListView, Static
 
 from core.mode_manager import COMMANDS_WITH_ARGS, PALETTE_COMMANDS
 from tui.markup_safe import tx_escape as escape
+from tui.tokens import rich_color
 
-MATCH_STYLE = "#b4befe"  # Lavender — highlight bagian yang match
+MATCH_STYLE = "#b4befe"  # Lavender default (theme aktif via rich_color)
 
 # Kategori TUI-side (TUI-R3 §12) — dari 12 command existing, tanpa ubah core.
 # Header disisip sebagai item disabled (navigasi skip otomatis).
@@ -94,10 +95,15 @@ def is_header(item: tuple[str, str]) -> bool:
     return item[0].startswith(HEADER_MARK)
 
 
-def render_item(cmd: str, desc: str, needle: str) -> Text:
-    """'model' match lavender + shortcut kanan (kalau ada). Pure function."""
+def render_item(cmd: str, desc: str, needle: str,
+                accent: str = "#b4befe") -> Text:
+    """'model' match accent + shortcut kanan (kalau ada). Pure function.
+
+    accent default hex (selftest/headless); caller widget pass warna theme
+    via tokens.rich_color (R12: konsistensi warna single-source).
+    """
     t = Text()
-    t.append(cmd[:1 + len(needle)], style=f"bold {MATCH_STYLE}")
+    t.append(cmd[:1 + len(needle)], style=f"bold {accent}")
     t.append(cmd[1 + len(needle):])
     t.append(f"      {desc}", style="dim")
     if key := COMMAND_KEYS.get(cmd):
@@ -193,7 +199,9 @@ class SlashPalette(Vertical):
                     Label(f"{cmd[len(HEADER_MARK):]}", classes="slash-group"),
                     disabled=True))  # header tak selectable/klik
             else:
-                lst.append(ListItem(Label(render_item(cmd, desc, self._needle))))
+                lst.append(ListItem(Label(render_item(
+                    cmd, desc, self._needle,
+                    rich_color(self.app, "lavender", MATCH_STYLE)))))
         self._highlight()
 
     def _highlight(self) -> None:

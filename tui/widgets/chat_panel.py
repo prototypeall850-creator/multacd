@@ -13,6 +13,7 @@ from textual.containers import VerticalScroll
 from textual.widgets import Markdown, Static
 
 from tui.markup_safe import tx_escape as escape
+from tui.tokens import rich_color
 from tui.widgets.tool_activity import ToolActivity
 
 
@@ -96,7 +97,8 @@ class ChatPanel(VerticalScroll):
             prov = provider_id_of(model) or "custom"
         except Exception:
             prov = "custom"
-        logo = Text("m u l t a c d", style="bold #b4befe")  # lavender §10
+        logo = Text("m u l t a c d",
+                    style=f"bold {rich_color(self.app, 'lavender', '#b4befe')}")  # §10
         body = Text()
         body.append("Tanya apapun... ", style="")
         body.append(self.SPLASH_QUOTE, style="dim")
@@ -104,7 +106,8 @@ class ChatPanel(VerticalScroll):
         body.append(mode, style="blue")
         body.append(f"  ·  {short}  ·  {prov}", style="dim")
         tip = Text()
-        tip.append(f"{_icons.icon('bullet')}  Tip  ", style="#fab387")  # peach §10
+        tip.append(f"{_icons.icon('bullet')}  Tip  ",
+                   style=rich_color(self.app, "peach", "#fab387"))  # §10
         tip.append(self.pick_tip(), style="dim")
         ver = Text(f"v{version}", style="dim")
         # TUI-R7: tanpa Panel border (§34) + tanpa hints (duplikat footer).

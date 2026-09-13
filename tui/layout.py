@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 SIDEBAR_WIDE = 140  # >= ini: sidebar lega
 SIDEBAR_MIN = 110  # < ini: sidebar hidden (auto)
-FOOTER_COMPACT = 70  # < ini: footer hints pendek
+FOOTER_COMPACT = 100  # < ini: footer hints pendek (R12 §36: 80x24 minimal)
 INPUT_COMPACT_ROWS = 30  # < ini: cap input pendek (kasih ruang chat di HP)
 WIDE_PCT = "24%"
 MID_PCT = "18%"
@@ -81,12 +81,14 @@ if __name__ == "__main__":
     assert layout_for_width(110).sidebar_visible is True
     assert layout_for_width(109) == ShellLayout(False, "18%", False, 3, 8)
     assert layout_for_width(80).sidebar_visible is False
+    # R12 §36: <100 kolom footer pendek (80x24 → 1 baris, tak wrap).
+    assert layout_for_width(80).footer_compact is True
+    assert layout_for_width(99).footer_compact is True
+    assert layout_for_width(100).footer_compact is False
     assert layout_for_width(60).footer_compact is True
-    assert layout_for_width(69).footer_compact is True
-    assert layout_for_width(70).footer_compact is False
     # Manual override Ctrl+I.
     assert layout_for_width(160, False) == ShellLayout(False, "24%", False, 3, 8)
-    assert layout_for_width(80, True) == ShellLayout(True, "45%", False, 3, 8)
+    assert layout_for_width(80, True) == ShellLayout(True, "45%", True, 3, 8)
     assert layout_for_width(160, True).sidebar_width == "24%"
     assert layout_for_width(80, False).sidebar_visible is False
     assert layout_for_width(0) == ShellLayout(False, "18%", True, 3, 8)
