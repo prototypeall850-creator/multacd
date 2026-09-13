@@ -96,18 +96,35 @@ def is_header(item: tuple[str, str]) -> bool:
 
 
 def render_item(cmd: str, desc: str, needle: str,
-                accent: str = "#b4befe") -> Text:
+                accent: str = "#b4befe", width: int = 0) -> Text:
     """'model' match accent + shortcut kanan (kalau ada). Pure function.
 
     accent default hex (selftest/headless); caller widget pass warna theme
     via tokens.rich_color (R12: konsistensi warna single-source).
+
+    P4 (parity opencode): dengan `width` → dua kolom rata — command di
+    kolom kiri, deskripsi mulai kolom tetap (max(min(w-24, 40), 14)) +
+    dipotong '…' kalau sempit. Tanpa width (selftest/layar kecil) → gaya
+    lama (desc nempel 6 spasi).
     """
     t = Text()
     t.append(cmd[:1 + len(needle)], style=f"bold {accent}")
     t.append(cmd[1 + len(needle):])
-    t.append(f"      {desc}", style="dim")
-    if key := COMMAND_KEYS.get(cmd):
-        t.append(f"  ·  {key}", style="dim")
+    body = f"  ·  {COMMAND_KEYS[cmd]}" if cmd in COMMAND_KEYS else ""
+    if width >= 40:
+        col = max(14, min(width - 24, 40))
+        t.append(" " * max(1, col - len(cmd)))
+        avail = max(4, width - col - 2)
+        if body:
+            avail = max(4, avail - len(body) - 1)
+        shown = desc if len(desc) <= avail else desc[:avail - 1] + "…"
+        t.append(shown, style="dim")
+        if body:
+            t.append(body, style="dim")
+    else:
+        t.append(f"      {desc}", style="dim")
+        if body:
+            t.append(body, style="dim")
     return t
 
 
@@ -147,10 +164,15 @@ class SlashPalette(Vertical):
         self._overlay = overlay
         if overlay:
             self.add_class("overlay")
-        self._matches = grouped_matches(needle)
+        # P4: inline (ketik '/') = flat ranked ala opencode; overlay Ctrl+P
+        # tetap bergrup (mode browse — keputusan R3 masih kepakai di sana).
+        self._matches = (grouped_matches(needle) if overlay
+                         else match_commands(needle))
         self._index = self._first_command(0)
         self._rebuild()
         self.display = True
+        with suppress(Exception):
+            self.query_one("#slash-title", Static).display = overlay
 
     def refilter(self, needle: str) -> None:
         if not self.display:
@@ -201,8 +223,22 @@ class SlashPalette(Vertical):
             else:
                 lst.append(ListItem(Label(render_item(
                     cmd, desc, self._needle,
-                    rich_color(self.app, "lavender", MATCH_STYLE)))))
+                    rich_color(self.app, "lavender", MATCH_STYLE),
+                    width=self._content_width()))))
         self._highlight()
+
+    def _content_width(self) -> int:
+        """Lebar efektif baris — size sendiri belum ter-layout saat open
+        pertama (display:none → size 0), fallback ke ukuran screen."""
+        w = self.size.width
+        if w >= 40:
+            return w
+        with suppress(Exception):
+            # Widget display:none belum punya screen_size — ambil dari screen.
+            base = self.app.screen.size.width
+            frac = 0.6 if self._overlay else 1.0
+            w = int(base * frac) - 4  # padding+border
+        return max(0, w)
 
     def _highlight(self) -> None:
         try:

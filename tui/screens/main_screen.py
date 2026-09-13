@@ -120,11 +120,13 @@ class MainScreen(Screen):
         display: none;
         height: auto;
         max-height: 12;
-        border: solid $primary;
+        /* P4: inline nempel #input-wrap jadi satu box ┃ ala opencode */
+        border-left: solid $primary;
         background: $surface;
         padding: 0 1;
     }
     #slash-palette.overlay {
+        border: solid $primary;
         position: absolute;
         /* offset-% resolve ke ukuran sendiri: 33% x 60% = 20% layar,
            center horizontal di semua lebar. y scalar: di bawah bar atas. */
