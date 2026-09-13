@@ -250,7 +250,7 @@ class MainScreen(Screen):
         yield ModelSelector()
         yield ProviderSelector()
         with Vertical(id="input-wrap"):
-            yield InputBar()
+            yield InputBar(placeholder="Tanya apa aja…")
             yield Static("", id="input-meta")
         yield FooterBar()
 

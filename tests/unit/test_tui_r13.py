@@ -25,17 +25,19 @@ def app():
 
 
 def test_logo_shape():
-    """Logo block art: 6 baris, lebar konsisten, adaptif layar sempit."""
+    """Logo half-block 3 baris, lebar konsisten, adaptif layar sempit."""
     lines = logo_lines()
-    assert len(lines) == 6 and len({len(x) for x in lines}) == 1
+    assert len(lines) == 3 and len({len(x) for x in lines}) == 1
     assert logo_lines("x!") == []  # huruf tak ada → kosong (jangan rusak UI)
-    assert render_logo_adaptive(100).plain.count("\n") == 5
-    assert render_logo_adaptive(40).plain == "multacd"  # Termux portrait
+    assert render_logo_adaptive(100).plain.count("\n") == 2
+    assert render_logo_adaptive(30).plain == "multacd"  # tak muat → kecil
 
 
 def test_input_meta_text():
-    assert input_meta_text("code", "openai/gpt-5") == "code · gpt-5"
-    assert input_meta_text("code", "") == "code · ?"
+    """Markup: mode bold + model dim, model dipendekkan tanpa provider."""
+    m = input_meta_text("code", "openai/gpt-5")
+    assert "[bold]code[/]" in m and "gpt-5" in m and "openai/" not in m
+    assert "?" in input_meta_text("code", "")
 
 
 @pytest.mark.asyncio
