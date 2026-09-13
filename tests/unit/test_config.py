@@ -86,3 +86,32 @@ def test_empty_optional_keys_forgiven(tmp_path: Path):
     # angka wajib kosong tetap ditolak via gt
     with pytest.raises(ConfigError):
         Config(model="m", api_key="k", max_tokens=None)
+
+# --- P1 (parity opencode): {env:VAR} di config -------------------------
+
+def test_env_ref_full_and_mixed(monkeypatch):
+    from core.config import Config, config_from_dict
+    monkeypatch.setenv("MC_P1", "kunci-42")
+    cfg = config_from_dict({"model": "{env:MC_P1}/m", "api_key": "{env:MC_P1}"})
+    assert isinstance(cfg, Config)
+    assert cfg.api_key == "kunci-42"
+    assert cfg.model == "kunci-42/m"  # campuran dalam satu string
+
+
+def test_env_ref_missing_becomes_empty(monkeypatch):
+    from core.config import ConfigError, config_from_dict
+    monkeypatch.delenv("MC_P1_KOSONG", raising=False)
+    with pytest.raises(ConfigError):  # validasi existing yang negur
+        config_from_dict({"model": "m", "api_key": "{env:MC_P1_KOSONG}"})
+
+
+def test_env_ref_recursive_nested(monkeypatch):
+    from core.config import config_from_dict
+    monkeypatch.setenv("MC_P1_T", "tok")
+    cfg = config_from_dict({
+        "model": "m", "api_key": "k",
+        "telegram": {"bot_token": "{env:MC_P1_T}", "allowed_users": [1]},
+        "provider_keys": {"groq": "{env:MC_P1_T}"},
+    })
+    assert cfg.telegram.bot_token == "tok"
+    assert cfg.provider_keys["groq"] == "tok"
