@@ -20,7 +20,7 @@ def test_breakpoints_brief_v2():
 
 def test_manual_override_ctrl_i():
     assert layout_for_width(160, False).sidebar_visible is False
-    assert layout_for_width(80, True) == ShellLayout(True, "45%", False, 3, 8)
+    assert layout_for_width(80, True) == ShellLayout(True, "45%", True, 3, 8)
     assert layout_for_width(160, True).sidebar_width == "24%"
     assert layout_for_width(80, False).sidebar_visible is False
     assert layout_for_width(80, None).sidebar_visible is False
@@ -32,12 +32,14 @@ def test_input_grow_caps():
     assert layout_for_width(120, None, 40).input_max == 8
     assert layout_for_width(80, None, 29).input_max == 5
     assert layout_for_width(80, None, 24).input_max == 5
-    assert layout_for_width(80, True, 24) == ShellLayout(True, "45%", False, 3, 5)
+    assert layout_for_width(80, True, 24) == ShellLayout(True, "45%", True, 3, 5)
 
 
 def test_footer_compact_narrow():
-    assert layout_for_width(69).footer_compact is True
-    assert layout_for_width(70).footer_compact is False
+    """R12: breakpoint 100 — 80x24 (Termux landscape) hints pendek."""
+    assert layout_for_width(80).footer_compact is True
+    assert layout_for_width(99).footer_compact is True
+    assert layout_for_width(100).footer_compact is False
 
 
 def test_session_title_single():

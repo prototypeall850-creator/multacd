@@ -27,6 +27,18 @@ def narrow(cols: int | None = None) -> bool:
     w = cols if cols is not None else term_width()
     return w < 70
 
+def rich_color(app: object, name: str, default: str) -> str:
+    """Warna theme utk Rich Text/Style — single source dari theme aktif.
+
+    Rich Text/Style tidak resolve `$var` CSS milik Textual, jadi warna
+    Rich diambil dari theme via app.get_css_variables(). Gagal (app
+    belum mount / test headless) → default hex (Catppuccin Mocha).
+    """
+    try:
+        return app.get_css_variables().get(name, default)  # type: ignore[attr-defined]
+    except Exception:
+        return default
+
 
 def is_min_mode() -> bool:
     """Mode hemat Termux: ascii + tanpa animasi + watcher jarang.

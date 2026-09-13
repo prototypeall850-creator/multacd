@@ -18,6 +18,7 @@ from textual.widgets import DirectoryTree
 from textual.widgets._tree import TreeNode
 
 from core.codebase import SKIP_DIRS
+from tui.tokens import rich_color
 
 
 class FileOpenRequested(Message):
@@ -116,6 +117,8 @@ class ProjectTree(DirectoryTree):
                 continue
             label = Path(path).name
             if rel in modified:
-                node.set_label(Text(f"{label} ●", style="#fab387"))
+                node.set_label(Text(
+                    f"{label} ●",
+                    style=rich_color(self.app, "peach", "#fab387")))
             else:
                 node.set_label(label)
