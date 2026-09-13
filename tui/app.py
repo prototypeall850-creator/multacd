@@ -19,6 +19,7 @@ from memory.context import ConversationContext
 from tui import icons
 from tui.screens.main_screen import MainScreen
 from tui.themes import THEMES, resolve_theme_name
+from tui.widgets.fresh_layer import FreshScreen
 
 APP_VERSION = get_version()
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -91,7 +92,17 @@ class MultacdApp(App[None]):
         screen = MainScreen()
         self.main_screen = screen
         self.push_screen(screen)
+        # TUI-R13: layar awal ala OpenCode (logo + input di tengah).
+        # Pop + forward submit → MainScreen._submit.
+        self.push_screen(FreshScreen())
         self.theme = resolve_theme_name(self.cfg.theme)
+
+    def submit_from_fresh(self, text: str) -> None:
+        """FreshScreen submit: tutup layar awal, lanjut ke MainScreen."""
+        async def _pop_then_submit() -> None:
+            await self.pop_screen()
+            self.main_screen._submit(text)
+        self.run_worker(_pop_then_submit())
 
     def action_safe_quit(self) -> None:
         """Keluar graceful: kalau agent jalan, tekan 2x (kedua = paksa keluar)."""

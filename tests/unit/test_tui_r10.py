@@ -31,6 +31,7 @@ async def test_ctrl_b_toggle_ui_only(app):
     """Ctrl+B: UI dilepas, task/state TIDAK disentuh (§29 bukan cancel)."""
     async with app.run_test() as pilot:
         s = app.main_screen
+        await app.pop_screen()  # R13: MainScreen harus screen aktif
         s.session.begin_turn()  # simulasi turn jalan (tanpa LLM)
         s.session.status = AgentStatus.THINKING
         await pilot.press("ctrl+b")
@@ -55,11 +56,11 @@ async def test_submit_block_while_background(app):
         s._bg_active = True
         from tui.widgets.chat_panel import ChatPanel
         chat = s.query_one(ChatPanel)
-        await chat.dismiss_splash()
-        before = len(list(chat.children))
         s._submit("buatkan fitur baru")
         await pilot.pause()
-        assert len(list(chat.children)) == before + 1  # info line muncul
+        texts = [str(getattr(c.render(), "plain", c.render()))
+                 for c in chat.children]
+        assert any("Agent jalan di background" in t for t in texts), texts
         assert s.session.busy  # masih jalan, tidak ada turn kedua
         assert s._turn_running
 

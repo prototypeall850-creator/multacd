@@ -9,9 +9,9 @@ from typing import Any
 
 from textual import events
 from textual.app import ComposeResult
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import TextArea
+from textual.widgets import Static, TextArea
 
 from core.agent_events import (
     AgentContinue,
@@ -24,6 +24,7 @@ from core.agent_events import (
 from core.codebase import get_git_summary
 from core.session_state import AgentStatus, SessionState
 from tui.controllers.agent_controller import AgentController, TurnHooks
+from tui.widgets import fresh_layer as fresh
 from tui.widgets.chat_panel import ChatPanel, render_meta
 from tui.widgets.confirm_dialog import AskDialog, ContinueDialog
 from tui.widgets.context_sidebar import ContextSidebar
@@ -180,9 +181,20 @@ class MainScreen(Screen):
         display: block;
         height: 1fr;
     }
+    #input-wrap {
+        height: auto;
+        border-left: solid $primary;
+        background: $surface;
+        padding: 0 1;
+    }
     #input-bar {
         height: 3;
-        border: solid $primary;
+        border: none;
+        background: transparent;
+    }
+    #input-meta {
+        height: 1;
+        color: $text-muted;
     }
     #footer-bar {
         height: 1;
@@ -237,7 +249,9 @@ class MainScreen(Screen):
         yield SlashPalette()
         yield ModelSelector()
         yield ProviderSelector()
-        yield InputBar()
+        with Vertical(id="input-wrap"):
+            yield InputBar(placeholder="Tanya apa aja…")
+            yield Static("", id="input-meta")
         yield FooterBar()
 
     def on_mount(self) -> None:
@@ -247,10 +261,17 @@ class MainScreen(Screen):
         self._refresh_shell()
         self._apply_layout(*self._layout_size())
         self._refresh_info()  # sidebar langsung terisi, bukan "(info)"
+        self._sync_input_meta()
         self.query_one(InputBar).focus()
         self.run_worker(self._show_welcome())
         self.run_worker(self._git_watcher())
         self.run_worker(self._maybe_update_notice())
+
+    def _sync_input_meta(self) -> None:
+        """Baris meta dalam input box: `code · model` (TUI-R13)."""
+        with suppress(Exception):
+            self.query_one("#input-meta", Static).update(fresh.input_meta_text(
+                self.app.mode_manager.get_mode(), self.app.cfg.model))
 
     async def _git_watcher(self) -> None:
         """Refresh segmen git status bar (background, tanpa ganggu chat).
@@ -307,6 +328,7 @@ class MainScreen(Screen):
         mm = self.app.mode_manager
         self.query_one(StatusBar).set_mode(mm.get_mode())
         self.app.composer.update_mode(mm.get_mode_prompt())
+        self._sync_input_meta()
         # Keluar /research → sembunyikan panel sumber (lihat PLAN-phase3 §10).
         panel = self.query_one(SourcesPanel)
         if mm.get_mode() != "research":
