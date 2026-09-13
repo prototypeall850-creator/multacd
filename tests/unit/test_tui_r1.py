@@ -9,20 +9,28 @@ from tui.widgets.session_bar import render_session_title
 
 
 def test_breakpoints_brief():
-    assert layout_for_width(160) == ShellLayout(True, "24%", False)
+    assert layout_for_width(160) == ShellLayout(True, "24%", False, 5)
     assert layout_for_width(120).sidebar_width == "24%"
-    assert layout_for_width(119) == ShellLayout(True, "18%", False)
+    assert layout_for_width(119) == ShellLayout(True, "18%", False, 5)
     assert layout_for_width(90).sidebar_visible is True
-    assert layout_for_width(89) == ShellLayout(False, "18%", False)
+    assert layout_for_width(89) == ShellLayout(False, "18%", False, 5)
     assert layout_for_width(80).sidebar_visible is False
 
 
 def test_manual_override_ctrl_i():
     assert layout_for_width(160, False).sidebar_visible is False
-    assert layout_for_width(80, True) == ShellLayout(True, "45%", False)
+    assert layout_for_width(80, True) == ShellLayout(True, "45%", False, 5)
     assert layout_for_width(160, True).sidebar_width == "24%"
     assert layout_for_width(80, False).sidebar_visible is False
     assert layout_for_width(80, None).sidebar_visible is False
+
+
+def test_input_height_short_screens():
+    assert layout_for_width(120, None, 40).input_height == 5
+    assert layout_for_width(120, None, 30).input_height == 5
+    assert layout_for_width(80, None, 29).input_height == 3
+    assert layout_for_width(80, None, 24).input_height == 3
+    assert layout_for_width(80, True, 24) == ShellLayout(True, "45%", False, 3)
 
 
 def test_footer_compact_narrow():

@@ -200,7 +200,7 @@ class MainScreen(Screen):
         # keputusan layout terakhir (biar apply idempotent), lebar terakhir.
         self._sidebar_manual: bool | None = None
         self._last_layout: object | None = None
-        self._last_width: int = 0
+        self._last_size: tuple[int, int] = (0, 0)
 
     @property
     def _turn_running(self) -> bool:
@@ -239,7 +239,7 @@ class MainScreen(Screen):
         bar.set_git(self.app.git_summary)
         bar.render_state(self.session)  # IDLE awal — dari state, konsisten R5
         self._refresh_shell()
-        self._apply_layout(self._layout_width())
+        self._apply_layout(*self._layout_size())
         self._refresh_info()  # sidebar langsung terisi, bukan "(info)"
         self.query_one(InputBar).focus()
         self.run_worker(self._show_welcome())
@@ -312,7 +312,7 @@ class MainScreen(Screen):
         if tree.display:
             self._refresh_tree_marks(tree)
         self._refresh_shell()
-        self._apply_layout(self._layout_width())
+        self._apply_layout(*self._layout_size())
         self._refresh_info()
 
     def _refresh_tree_marks(self, tree: ProjectTree | None = None) -> None:
@@ -379,33 +379,35 @@ class MainScreen(Screen):
         with suppress(Exception):
             self.query_one(ContextSidebar).set_mcp()
 
-    def _layout_width(self) -> int:
-        """Lebar terminal saat ini; fallback aman buat test/worker."""
+    def _layout_size(self) -> tuple[int, int]:
+        """Ukuran terminal saat ini; fallback aman buat test/worker."""
         try:
-            w = self.size.width
-            if w:
-                return int(w)
+            w, h = self.size.width, self.size.height
+            if w and h:
+                return int(w), int(h)
         except Exception:
             pass
         from tui.tokens import term_width
-        return term_width()
+        return term_width(), 40
 
     def on_resize(self, event: events.Resize) -> None:
         """Terminal di-resize → terapkan breakpoint sidebar/footer (TUI-R1)."""
         with suppress(Exception):
-            self._apply_layout(event.size.width)
+            self._apply_layout(event.size.width, event.size.height)
 
-    def _apply_layout(self, width: int) -> None:
+    def _apply_layout(self, width: int, height: int = 40) -> None:
         """Terapkan ShellLayout; sentuh Textual hanya bila keputusan berubah."""
         from tui.layout import layout_for_width
-        self._last_width = width
-        lay = layout_for_width(width, self._sidebar_manual)
+        self._last_size = (width, height)
+        lay = layout_for_width(width, self._sidebar_manual, height)
         if lay != self._last_layout:
             self._last_layout = lay
             with suppress(Exception):
                 sidebar = self.query_one(ContextSidebar)
                 sidebar.display = lay.sidebar_visible
                 sidebar.styles.width = lay.sidebar_width
+            with suppress(Exception):
+                self.query_one(InputBar).styles.height = lay.input_height
         with suppress(Exception):
             self.query_one(FooterBar).set_compact(lay.footer_compact)
 
@@ -471,7 +473,7 @@ class MainScreen(Screen):
         except Exception:
             return
         self._sidebar_manual = not visible
-        self._apply_layout(self._last_width)
+        self._apply_layout(*self._last_size)
         if self._sidebar_manual:
             self._refresh_info()
         else:
