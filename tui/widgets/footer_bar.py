@@ -17,17 +17,20 @@ SHORT_HINTS = "ctrl+o · / · ctrl+i"
 
 
 def short_workdir(path: str, max_cols: int = 32) -> str:
-    """`$HOME/x` → `~/x`. Kepanjangan → potong kiri + '…'. Pure."""
+    """`$HOME/x` → `~/x`. Kepanjangan → potong kiri + '…'. Pure.
+
+    Pakai Path.relative_to (bukan concat string) biar benar di
+    Windows yang separatornya backslash (issue #41).
+    """
     s = (path or "").strip() or "?"
-    try:
+    with suppress(ValueError, RuntimeError, OSError):
+        rel = Path(s).expanduser().relative_to(Path.home())
+        s = "~" if str(rel) == "." else f"~/{rel.as_posix()}"
+        if len(s) > max_cols >= 2:
+            s = "…" + s[-(max_cols - 1):]
+        return s
+    with suppress(Exception):
         s = str(Path(s).expanduser())
-        home = str(Path.home())
-        if s == home:
-            s = "~"
-        elif s.startswith(home + "/"):
-            s = "~" + s[len(home):]
-    except Exception:
-        pass
     if len(s) > max_cols >= 2:
         s = "…" + s[-(max_cols - 1):]
     return s
