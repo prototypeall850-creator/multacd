@@ -6,11 +6,12 @@ import asyncio
 from contextlib import suppress
 from typing import Any
 
+from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import TextArea
+from textual.widgets import Static, TextArea
 
 from core.agent_events import (
     AgentContinue,
@@ -25,12 +26,15 @@ from core.session_state import AgentStatus, SessionState
 from tui.controllers.agent_controller import AgentController, TurnHooks
 from tui.widgets.chat_panel import ChatPanel
 from tui.widgets.confirm_dialog import AskDialog, ContinueDialog
+from tui.widgets.context_sidebar import ContextSidebar
 from tui.widgets.diff_viewer import DiffViewer
 from tui.widgets.file_tree import FileOpenRequested, ProjectTree, modified_files
+from tui.widgets.footer_bar import FooterBar, short_workdir
 from tui.widgets.info_panel import InfoPanel, estimate_tokens
 from tui.widgets.input_bar import InputBar, InputSubmitted
 from tui.widgets.model_selector import ModelSelector
 from tui.widgets.permission_popup import PermissionPopup
+from tui.widgets.session_bar import SessionBar
 from tui.widgets.slash_palette import SlashPalette
 from tui.widgets.sources_panel import (
     ExportResearchRequested,
@@ -56,6 +60,11 @@ class MainScreen(Screen):
     CSS = """
     MainScreen {
         layout: vertical;
+    }
+    #session-bar {
+        height: 1;
+        background: $surface;
+        padding: 0 1;
     }
     #status-bar {
         height: 1;
@@ -88,11 +97,19 @@ class MainScreen(Screen):
         padding: 0 1;
     }
     #info-panel {
-        width: 25%;
-        min-width: 20;
-        display: none;
-        border-left: solid $accent;
+        height: auto;
+        padding: 0;
+    }
+    #context-sidebar {
+        width: 24%;
+        min-width: 22;
+        border-left: solid $primary;
         padding: 0 1;
+    }
+    #mcp-body {
+        height: auto;
+        color: $text-muted;
+        padding-top: 1;
     }
     #diff-viewer {
         display: none;
@@ -129,6 +146,17 @@ class MainScreen(Screen):
         height: 5;
         border: solid $primary;
     }
+    #input-meta {
+        height: 1;
+        padding: 0 1;
+        color: $text-muted;
+    }
+    #footer-bar {
+        height: 1;
+        background: $surface;
+        padding: 0 1;
+        color: $text-muted;
+    }
     """
 
     def __init__(self) -> None:
@@ -139,6 +167,11 @@ class MainScreen(Screen):
         # Controller loop agent (R4) — dibuat sekali biar approve [A]
         # persist lintas turn (issue #32).
         self._agent_ctl: AgentController | None = None
+        # TUI-R1 shell: override manual sidebar (None = ikut lebar terminal),
+        # keputusan layout terakhir (biar apply idempotent), lebar terakhir.
+        self._sidebar_manual: bool | None = None
+        self._last_layout: object | None = None
+        self._last_width: int = 0
 
     @property
     def _turn_running(self) -> bool:
@@ -153,18 +186,21 @@ class MainScreen(Screen):
             self.session.end_turn()
 
     def compose(self) -> ComposeResult:
+        yield SessionBar()
         yield StatusBar()
         with Horizontal(id="body"):
             yield ChatPanel()
             yield ProjectTree(self.app.workdir)
             yield SourcesPanel()
-            yield InfoPanel()
+            yield ContextSidebar()
         yield DiffViewer()
         yield ThinkingBar()
         yield PermissionPopup()
         yield SlashPalette()
         yield ModelSelector()
+        yield Static("", id="input-meta")
         yield InputBar()
+        yield FooterBar()
 
     def on_mount(self) -> None:
         bar = self.query_one(StatusBar)
@@ -172,6 +208,8 @@ class MainScreen(Screen):
         bar.set_mode(self.app.mode_manager.get_mode())
         bar.set_git(self.app.git_summary)
         bar.render_state(self.session)  # IDLE awal — dari state, konsisten R5
+        self._refresh_shell()
+        self._apply_layout(self._layout_width())
         self.query_one(InputBar).focus()
         self.run_worker(self._show_welcome())
         self.run_worker(self._git_watcher())
@@ -242,6 +280,8 @@ class MainScreen(Screen):
         tree = self.query_one(ProjectTree)
         if tree.display:
             self._refresh_tree_marks(tree)
+        self._refresh_shell()
+        self._apply_layout(self._layout_width())
         self._refresh_info()
 
     def _refresh_tree_marks(self, tree: ProjectTree | None = None) -> None:
@@ -271,24 +311,86 @@ class MainScreen(Screen):
         with suppress(Exception):
             tree.mark_modified(modified_files(self.app.workdir))
 
+    def _usage_strings(self) -> tuple[str, str]:
+        """(tokens_s, cost_s) dari SessionState/context. Tak pernah raise.
+
+        Token resmi kalau provider melapor; kalau tidak, heuristik ~.
+        Cost: angka resmi kalau >0, else — (lokal). Dipakai panel + footer.
+        """
+        try:
+            chars = sum(len(str(m.get("content", "")))
+                        for m in self.app.context.get_messages())
+        except Exception:
+            chars = 0
+        real_total = self.session.prompt_tokens + self.session.completion_tokens
+        tokens_s = (f"{real_total:,}".replace(",", ".") if real_total
+                    else f"~{estimate_tokens(chars):,}".replace(",", "."))
+        cost_s = (f"${self.session.cost_usd:.3f} est" if self.session.cost_usd > 0
+                  else "—")
+        return tokens_s, cost_s
+
+    def _refresh_shell(self) -> None:
+        """Sync session bar + input meta + footer + MCP (TUI-R1).
+
+        Read-only dari state existing. Tak pernah raise.
+        """
+        with suppress(Exception):
+            self.query_one(SessionBar).set_title(self.app.project_label or "—")
+        with suppress(Exception):
+            mode = self.app.mode_manager.get_mode()
+            short = (self.app.cfg.model or "?").split("/")[-1][:28]
+            self.query_one("#input-meta", Static).update(
+                Text(f"{mode} · {short}", style="dim"))
+        with suppress(Exception):
+            tokens_s, cost_s = self._usage_strings()
+            work = short_workdir(str(self.app.workdir))
+            self.query_one(FooterBar).set_data(work, f"{tokens_s} · {cost_s}")
+        with suppress(Exception):
+            self.query_one(ContextSidebar).set_mcp()
+
+    def _layout_width(self) -> int:
+        """Lebar terminal saat ini; fallback aman buat test/worker."""
+        try:
+            w = self.size.width
+            if w:
+                return int(w)
+        except Exception:
+            pass
+        from tui.tokens import term_width
+        return term_width()
+
+    def on_resize(self, event: events.Resize) -> None:
+        """Terminal di-resize → terapkan breakpoint sidebar/footer (TUI-R1)."""
+        with suppress(Exception):
+            self._apply_layout(event.size.width)
+
+    def _apply_layout(self, width: int) -> None:
+        """Terapkan ShellLayout; sentuh Textual hanya bila keputusan berubah."""
+        from tui.layout import layout_for_width
+        self._last_width = width
+        lay = layout_for_width(width, self._sidebar_manual)
+        if lay != self._last_layout:
+            self._last_layout = lay
+            with suppress(Exception):
+                sidebar = self.query_one(ContextSidebar)
+                sidebar.display = lay.sidebar_visible
+                sidebar.styles.width = lay.sidebar_width
+        with suppress(Exception):
+            self.query_one(FooterBar).set_compact(lay.footer_compact)
+
     def _refresh_info(self) -> None:
-        """Update info panel (kalau tampil) — tak pernah raise."""
+        """Update info panel (kalau sidebar tampil) — tak pernah raise."""
         try:
             info = self.query_one(InfoPanel)
         except Exception:
             return
-        if not info.display:
+        try:
+            if not self.query_one(ContextSidebar).display:
+                return
+        except Exception:
             return
         try:
-            chars = sum(len(str(m.get("content", "")))
-                        for m in self.app.context.get_messages())
-            real_total = self.session.prompt_tokens + self.session.completion_tokens
-            # Token resmi kalau provider melapor; kalau tidak, heuristik ~.
-            # Cost: angka resmi kalau >0, else estimasi ~, else — (lokal).
-            tokens_s = (f"{real_total:,}".replace(",", ".") if real_total
-                        else f"~{estimate_tokens(chars):,}".replace(",", "."))
-            cost_s = (f"${self.session.cost_usd:.3f} est" if self.session.cost_usd > 0
-                      else "—")
+            tokens_s, cost_s = self._usage_strings()
             git = self.app.git_summary
             git_s = "—"
             if git.get("is_repo"):
@@ -321,13 +423,18 @@ class MainScreen(Screen):
             pass
 
     def action_toggle_info(self) -> None:
-        """Ctrl+I: tampil/sembunyi info panel (DESIGN §11)."""
-        info = self.query_one(InfoPanel)
-        info.display = not info.display
-        if info.display:
+        """Ctrl+I: override manual sidebar (auto = ikut lebar terminal)."""
+        try:
+            visible = self.query_one(ContextSidebar).display
+        except Exception:
+            return
+        self._sidebar_manual = not visible
+        self._apply_layout(self._last_width)
+        if self._sidebar_manual:
             self._refresh_info()
         else:
-            self.query_one(InputBar).focus()
+            with suppress(Exception):
+                self.query_one(InputBar).focus()
 
     async def on_input_submitted(self, event: InputSubmitted) -> None:
         sel = self.query_one(ModelSelector)

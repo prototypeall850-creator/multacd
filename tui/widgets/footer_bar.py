@@ -1,0 +1,83 @@
+"""Compact footer TUI-R1 — 1 baris: workdir · usage · hints.
+
+Read-only, tak pernah raise. Angka dari SessionState/context (state
+existing) — bukan fake. Layar <70 kolom: hints dipangkas.
+"""
+
+from __future__ import annotations
+
+from contextlib import suppress
+from pathlib import Path
+
+from rich.text import Text
+from textual.widgets import Static
+
+FULL_HINTS = "ctrl+o models · / commands · ctrl+i panel"
+SHORT_HINTS = "ctrl+o · / · ctrl+i"
+
+
+def short_workdir(path: str, max_cols: int = 32) -> str:
+    """`$HOME/x` → `~/x`. Kepanjangan → potong kiri + '…'. Pure."""
+    s = (path or "").strip() or "?"
+    try:
+        s = str(Path(s).expanduser())
+        home = str(Path.home())
+        if s == home:
+            s = "~"
+        elif s.startswith(home + "/"):
+            s = "~" + s[len(home):]
+    except Exception:
+        pass
+    if len(s) > max_cols >= 2:
+        s = "…" + s[-(max_cols - 1):]
+    return s
+
+
+def render_footer(workdir: str, usage: str, compact: bool = False) -> str:
+    """Satu baris footer. Pure function."""
+    hints = SHORT_HINTS if compact else FULL_HINTS
+    use = (usage or "").strip() or "—"
+    return f"{workdir}  {use}  {hints}"
+
+
+class FooterBar(Static):
+    """Baris paling bawah. Update via set_data (screen), compact via layout."""
+
+    def __init__(self) -> None:
+        super().__init__("", id="footer-bar")
+        self._workdir = "?"
+        self._usage = "—"
+        self._compact = False
+
+    def set_data(self, workdir: str, usage: str) -> None:
+        self._workdir = workdir or "?"
+        self._usage = usage or "—"
+        self._paint()
+
+    def set_compact(self, compact: bool) -> None:
+        if compact != self._compact:
+            self._compact = compact
+            self._paint()
+
+    def _paint(self) -> None:
+        text = render_footer(self._workdir, self._usage, self._compact)
+        with suppress(Exception):  # belum mount saat dipanggil dari test
+            self.update(Text(text, style="dim"))
+
+
+if __name__ == "__main__":
+    home = str(Path.home())
+    assert short_workdir(home) == "~"
+    assert short_workdir(f"{home}/proj") == "~/proj"
+    assert short_workdir("") == "?"
+    long = short_workdir("/a/" + "x" * 50, 32)
+    assert len(long) == 32 and long.startswith("…")
+    full = render_footer("~/p", "12.450 · —", False)
+    assert "ctrl+i panel" in full and "~/p" in full
+    short = render_footer("~/p", "12.450 · —", True)
+    assert "ctrl+i panel" not in short and "ctrl+i" in short
+    bar = FooterBar.__new__(FooterBar)
+    bar._workdir, bar._usage, bar._compact = "?", "—", False
+    FooterBar.set_data(bar, "~/p", "1 · —")
+    assert bar._workdir == "~/p"
+    print("✅ footer_bar self-test OK")
