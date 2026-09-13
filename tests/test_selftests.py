@@ -95,6 +95,7 @@ SELF_TEST_MODULES = [
     "briefing.sources.news_source",
     "briefing.generator",
     "core.plugin_loader",
+    "core.clipboard",
     "core.updater",
 ]
 
