@@ -55,6 +55,7 @@ SELF_TEST_MODULES = [
     "tui.markup_safe",
     "tui.widgets.thinking_bar",
     "tui.widgets.status_bar",
+    "tui.widgets.info_panel",
     "tui.layout",
     "tui.widgets.session_bar",
     "tui.widgets.context_sidebar",

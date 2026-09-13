@@ -25,10 +25,18 @@ def estimate_tokens(chars: int) -> int:
 
 
 def render_snapshot(data: dict[str, Any]) -> str:
-    """Render text panel dari snapshot dict. Pure function (gampang dites)."""
+    """Render text panel dari snapshot dict. Pure function (gampang dites).
+
+    Section ikut TUI_REDESIGN §20: Session/Context/Usage/Agent + mode/git
+    + MCP (di-render ContextSidebar, bukan di sini). Tanpa sumber limit
+    konteks/MCP registry → persen/limit/server TAK ditampilkan (jangan
+    fake angka); yang tampil hanya yang benar ada.
+    """
     mode = data.get("mode", "?")
     lines = [f"{data.get('project', '?')}"]
     lines.append("─" * 16)
+    lines.append(f"Session: {data.get('messages', 0)} pesan · "
+                 f"{data.get('tools', 0)} tools")
     if mode == "research":
         lines.append(f"Topik: {data.get('topic', '—')}")
         lines.append(f"Round: {data.get('round', '0/0')}")
@@ -42,10 +50,14 @@ def render_snapshot(data: dict[str, Any]) -> str:
     # int = estimasi (kasih ~); str = sudah diformat caller (resmi provider).
     toks_s = f"~{toks:,}".replace(",", ".") if isinstance(toks, int) else str(toks)
     lines.append(f"Context: {toks_s} tokens")
+    prompt = data.get("prompt", 0)
+    comp = data.get("completion", 0)
+    prompt_s = f"~{prompt:,}".replace(",", ".") if isinstance(prompt, int) else str(prompt)
+    comp_s = f"~{comp:,}".replace(",", ".") if isinstance(comp, int) else str(comp)
+    lines.append(f"In: {prompt_s} · Out: {comp_s}")
     lines.append(f"Cost: {data.get('cost', '—')}")
-    lines.append(f"Session: {data.get('messages', 0)} pesan · "
-                 f"{data.get('tools', 0)} tools")
-    lines.append(f"Model: {data.get('model', '?')}")
+    lines.append(f"Agent: {mode} · {data.get('model', '?')} · "
+                 f"{data.get('status', 'idle')}")
     return "\n".join(lines)
 
 
@@ -74,9 +86,12 @@ if __name__ == "__main__":
     assert "myapp" in s and "~12.450 tokens" in s and "12 pesan" in s
     assert "Cost: —" in s
     s2 = render_snapshot({"mode": "code", "project": "p", "git": "g",
-                          "tokens": "12.450", "messages": 1, "tools": 0,
-                          "model": "m"})
-    assert "Context: 12.450 tokens" in s2 and "~" not in s2.split("Context:")[1]
+                          "tokens": "12.450", "prompt": "10.000",
+                          "completion": "2.450", "messages": 1, "tools": 0,
+                          "model": "m", "status": "idle"})
+    ctx_line = s2.split("Context:")[1].split("\n")[0]
+    assert "Context: 12.450 tokens" in s2 and "~" not in ctx_line
+    assert "In: 10.000 · Out: 2.450" in s2
     r = render_snapshot({"mode": "research", "project": "p", "round": "2/5",
                          "sources": "6 read", "tokens": 0, "messages": 1,
                          "tools": 0, "model": "m"})
@@ -85,4 +100,12 @@ if __name__ == "__main__":
                          "jobs": "2", "tokens": 0, "messages": 0,
                          "tools": 0, "model": "m"})
     assert "Daemon: on" in p
-    print("✅ info_panel self-test OK (render 3 mode)")
+    # TUI-R5: Usage split + status agent (data SessionState, bukan fake).
+    u = render_snapshot({"mode": "code", "project": "p", "git": "g",
+                         "tokens": "1.200", "prompt": 1000, "completion": 200,
+                         "cost": "$0.003 est", "messages": 4, "tools": 2,
+                         "model": "groq/x", "status": "thinking"})
+    assert "In: ~1.000 · Out: ~200" in u, u
+    assert "Agent: code · groq/x · thinking" in u, u
+    assert "Session: 4 pesan · 2 tools" in u
+    print("✅ info_panel self-test OK (render 3 mode + usage/agent)")
