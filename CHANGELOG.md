@@ -2,6 +2,17 @@
 
 Format: Keep a Changelog. Versi: Semantic Versioning.
 
+## [2.0.0b9] - 2026-09-13
+
+Beta v2 kesembilan (redesign TUI, tanpa ubah agent): shell layout
+(session bar + sidebar responsif + footer, TUI-R1), gaya pesan chat
+(aksen user + meta jawaban, TUI-R2), palette overlay + grup (TUI-R3),
+provider selector popup + model overlay (TUI-R4), snapshot konteks
+jujur in/out + status (TUI-R5), input adaptif layar pendek (TUI-R6).
+Fix: short_workdir Windows (#41). Catatan: #44 (skills), #47 (limit/MCP).
+
+Install: `pip install "multacd==2.0.0b9"` (tanpa --pre).
+
 ## [2.0.0b8] - 2026-09-13
 
 Beta v2 kedelapan (refactor arsitektur, tanpa ubah fitur): kontrak event
