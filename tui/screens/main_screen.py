@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from contextlib import suppress
 from typing import Any
 
@@ -24,7 +25,7 @@ from core.agent_events import (
 from core.codebase import get_git_summary
 from core.session_state import AgentStatus, SessionState
 from tui.controllers.agent_controller import AgentController, TurnHooks
-from tui.widgets.chat_panel import ChatPanel
+from tui.widgets.chat_panel import ChatPanel, render_meta
 from tui.widgets.confirm_dialog import AskDialog, ContinueDialog
 from tui.widgets.context_sidebar import ContextSidebar
 from tui.widgets.diff_viewer import DiffViewer
@@ -210,6 +211,7 @@ class MainScreen(Screen):
         bar.render_state(self.session)  # IDLE awal — dari state, konsisten R5
         self._refresh_shell()
         self._apply_layout(self._layout_width())
+        self._refresh_info()  # sidebar langsung terisi, bukan "(info)"
         self.query_one(InputBar).focus()
         self.run_worker(self._show_welcome())
         self.run_worker(self._git_watcher())
@@ -817,6 +819,10 @@ class MainScreen(Screen):
         bar = self.query_one(StatusBar)
         inbar = self.query_one(InputBar)
         think = self.query_one(ThinkingBar)
+        # TUI-R2 §7: durasi + token turn ini buat meta jawaban (ukur di UI,
+        # read-only dari SessionState — agent runtime tak disentuh).
+        t0 = time.monotonic()
+        tok0 = self.session.completion_tokens
         try:
             inbar.set_busy(True)
             bar.render_state(self.session)
@@ -874,6 +880,12 @@ class MainScreen(Screen):
                 active_tools=self.app.mode_manager.get_active_tools(),
             )
         finally:
+            dur = time.monotonic() - t0
+            dtok = self.session.completion_tokens - tok0
+            with suppress(Exception):
+                meta = render_meta(self.app.mode_manager.get_mode(),
+                                   self.app.cfg.model, dur, dtok)
+                await chat.close_assistant(meta)
             self.session.end_turn()
             think.render_state(self.session)
             bar.render_state(self.session)

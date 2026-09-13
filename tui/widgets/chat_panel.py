@@ -16,6 +16,19 @@ from tui.markup_safe import tx_escape as escape
 from tui.widgets.tool_activity import ToolActivity
 
 
+def render_meta(mode: str, model: str, secs: float, tok: int) -> str:
+    """Meta kecil di bawah jawaban (TUI-R2 §7). Pure function.
+
+    `mode · model · 4.7s · 101 tok/s` — tok/s hanya kalau provider
+    melapor usage (tok>0); jangan fake angka.
+    """
+    short = (model or "?").split("/")[-1][:28] or "?"
+    base = f"{mode} · {short} · {max(0.0, secs):.1f}s"
+    if tok > 0 and secs > 0:
+        base += f" · {tok / secs:.0f} tok/s"
+    return base
+
+
 class ChatPanel(VerticalScroll):
     """Kontainer vertikal; tiap pesan di-mount sebagai widget sendiri."""
 
@@ -23,10 +36,20 @@ class ChatPanel(VerticalScroll):
 
     DEFAULT_CSS = """
     ChatPanel .assistant-md {
-        border: solid $primary;
         padding: 0 1;
         margin: 1 0;
         height: auto;
+    }
+    ChatPanel .user-msg {
+        border-left: solid $primary;
+        padding: 0 1;
+        margin: 0 0 1 0;
+        height: auto;
+    }
+    ChatPanel .assistant-meta {
+        text-align: right;
+        color: $text-muted;
+        margin: 0 0 1 0;
     }
     ChatPanel .splash-logo {
         text-align: center;
@@ -121,10 +144,10 @@ class ChatPanel(VerticalScroll):
         self._splash: list = []  # widget splash §10 (dismiss saat turn pertama)
 
     async def add_user(self, text: str) -> None:
-        # Panel body dibungkus Text: user bisa ketik `[...]` seenaknya
+        # Aksen kiri tipis (TUI-R2 §7) — tanpa card/title "You" besar.
+        # Body dibungkus Text: user bisa ketik `[...]` seenaknya
         # tanpa dianggap markup (issue #29).
-        await self.mount(Static(Panel(Text(text), title="You",
-                                      border_style="blue")))
+        await self.mount(Static(Text(text), classes="user-msg"))
         self.scroll_end(animate=False)
 
     async def add_info(self, text: str) -> None:
@@ -139,15 +162,28 @@ class ChatPanel(VerticalScroll):
         self.scroll_end(animate=False)
 
     async def start_assistant(self) -> None:
-        """Mulai bubble assistant baru untuk turn ini (streaming menempel ke sini)."""
+        """Mulai area assistant baru untuk turn ini (streaming menempel)."""
+        self._assistant_text = ""
+        self._assistant_md = Markdown("", classes="assistant-md")
+        await self.mount(self._assistant_md)
+        self.scroll_end(animate=False)
+
+    async def close_assistant(self, meta: str = "") -> None:
+        """Tutup turn: history di-push + meta kecil (§7). Aman kalau kosong.
+
+        Push history pindah ke sini (dulu di start_assistant turn berikut)
+        — isi history identik, cuma timing lebih awal.
+        """
+        if self._assistant_md is None:
+            return
         if self._assistant_text.strip():
             self._assistant_history.append(self._assistant_text)
             del self._assistant_history[:-20]
-        self._assistant_text = ""
-        self._assistant_md = Markdown("", classes="assistant-md")
-        self._assistant_md.border_title = "multacd"
-        await self.mount(self._assistant_md)
-        self.scroll_end(animate=False)
+        self._assistant_md = None
+        if meta.strip():
+            await self.mount(Static(Text(meta.strip()),
+                                    classes="assistant-meta"))
+            self.scroll_end(animate=False)
 
     async def append_assistant_text(self, delta: str) -> None:
         self._assistant_text += delta
@@ -191,9 +227,12 @@ class ChatPanel(VerticalScroll):
         if not res.get("success"):
             return
         text = str(res.get("result", ""))
+        head = Text("diff preview — cek sebelum approve:", style="dim")
         if not text.strip() or text.strip() == "(tidak ada output)":
+            await self.mount(Static(head))
             await self.mount(Static("(tidak ada perubahan buat di-commit)"))
         else:
+            await self.mount(Static(head))
             await self.mount(Static(render_diff(text)))
         self.scroll_end(animate=False)
 
