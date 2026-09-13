@@ -160,10 +160,25 @@ class MainScreen(Screen):
     #permission-popup {
         display: none;
         height: auto;
-        max-height: 7;
+        max-height: 9;
         border: solid $warning;
         background: $surface;
         padding: 0 1;
+    }
+    #perm-title { height: 1; }
+    #perm-title-text { width: 1fr; }
+    .perm-esc { width: auto; color: $text-muted; }
+    #perm-scope { color: $text-muted; }
+    #perm-hint { color: $text-muted; }
+    #perm-detail { display: none; }
+    #permission-popup.fullscreen {
+        dock: top;
+        height: 100%;
+        max-height: 100%;
+    }
+    #permission-popup.fullscreen #perm-detail {
+        display: block;
+        height: 1fr;
     }
     #input-bar {
         height: 3;
@@ -569,7 +584,8 @@ class MainScreen(Screen):
         """Fallback permission: kalau bar menunggu dan tombol jawab ditekan
         di widget lain (tree/panel), teruskan. InputBar sudah handle duluan
         untuk kasusnya sendiri (TextArea menelan keystrokes)."""
-        if event.key.lower() not in ("y", "n", "a", "e", "b", "enter", "escape"):
+        if event.key.lower() not in ("y", "n", "a", "e", "b", "enter",
+                                      "escape", "ctrl+f"):
             return
         try:
             perm = self.query_one(PermissionPopup)
