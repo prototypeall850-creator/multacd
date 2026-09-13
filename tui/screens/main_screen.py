@@ -56,6 +56,7 @@ class MainScreen(Screen):
         ("ctrl+i", "toggle_info", "Info"),
         ("ctrl+y", "copy_last", "Copy"),
         ("ctrl+p", "open_palette", "Commands"),
+        ("ctrl+b", "background_task", "Background"),
     ]
 
     CSS = """
@@ -192,6 +193,9 @@ class MainScreen(Screen):
         # TUI-R7: batas grow input (dari ShellLayout saat _apply_layout).
         self._input_base = 3
         self._input_max = 8
+        # TUI-R10: task di-background via Ctrl+B (murni UI state —
+        # worker agent TIDAK disentuh; streaming tetap masuk chat).
+        self._bg_active = False
 
     @property
     def _turn_running(self) -> bool:
@@ -355,7 +359,10 @@ class MainScreen(Screen):
         with suppress(Exception):
             tokens_s, cost_s = self._usage_strings()
             work = short_workdir(str(self.app.workdir))
-            self.query_one(FooterBar).set_data(work, f"{tokens_s} · {cost_s}")
+            usage = f"{tokens_s} · {cost_s}"
+            if self._bg_active:  # §30: footer boleh nunjukin background
+                usage += " · 1 background"
+            self.query_one(FooterBar).set_data(work, usage)
         with suppress(Exception):
             self.query_one(ContextSidebar).set_mcp()
 
@@ -574,6 +581,8 @@ class MainScreen(Screen):
 
     def _submit(self, text: str) -> None:
         if self.session.busy:
+            if self._bg_active:
+                self._submit_while_background(text)
             return  # abaikan submit ganda saat agent berpikir
         if not text.strip():
             return
@@ -617,6 +626,28 @@ class MainScreen(Screen):
             return
         self._turn_running = True
         self.run_worker(self._run_turn(text))
+
+    def _submit_while_background(self, text: str) -> None:
+        """Submit saat task di-background (TUI-R10 §29: UI tetap usable).
+
+        Yang aman saat turn jalan: command TUI-local (copy/model/models).
+        Pesan LLM baru + /clear + /connect → block jujur (1 session,
+        concurrent turn bakal interleave konteks — bukan behavior runtime).
+        """
+        parts = text.strip().split()
+        head = parts[0].lower() if parts else ""
+        if head == "/copy":
+            n = 1
+            if len(parts) > 1:
+                with suppress(ValueError):
+                    n = max(1, int(parts[1]))
+            self.copy_assistant(n)
+        elif head in ("/model", "/models"):
+            self.model_open()
+        else:
+            self.run_worker(self._bg_note(
+                "Agent jalan di background — tunggu selesai sebelum "
+                "kirim pesan/command baru."))
 
     def action_copy_last(self) -> None:
         """Ctrl+Y: salin jawaban terakhir."""
@@ -733,6 +764,37 @@ class MainScreen(Screen):
     def model_favorite(self) -> None:
         """Ctrl+F di selector: tandai favorit."""
         self.query_one(ModelSelector).toggle_favorite()
+
+    def action_background_task(self) -> None:
+        """Ctrl+B: background/foreground turn (TUI-R10 §29-30).
+
+        Task TIDAK dibunuh/di-restart — worker agent jalan terus
+        (streaming tetap masuk chat); yang dilepas cuma mode UI:
+        thinking bar → 'background', input bebas buat command TUI-local.
+        Satu session = satu task (jujur, bukan multi-task manager).
+        """
+        if not self.session.busy:
+            self.run_worker(self._bg_note("Tidak ada task yang jalan."))
+            return
+        self._bg_active = not self._bg_active
+        with suppress(Exception):
+            think = self.query_one(ThinkingBar)
+            if self._bg_active:
+                think.show("background")
+            else:
+                think.render_state(self.session)
+        with suppress(Exception):
+            self.query_one(InputBar).set_busy(not self._bg_active)
+        if self._bg_active:
+            self.run_worker(self._bg_note(
+                "↗ Task di-background — jalan terus di belakang. "
+                "Pesan baru tunggu selesai."))
+        self._refresh_shell()  # footer: n background
+
+    async def _bg_note(self, text: str) -> None:
+        """Info line TUI-local (dipakai background task)."""
+        with suppress(Exception):
+            await self.query_one(ChatPanel).add_info(text)
 
     def action_toggle_tree(self) -> None:
         """Ctrl+T: tampil/sembunyi file tree (+ tandai file modified)."""
@@ -939,11 +1001,13 @@ class MainScreen(Screen):
                 if isinstance(event, AgentText):
                     await chat.append_assistant_text(event.delta)
                 elif isinstance(event, AgentToolStart):
-                    think.render_state(self.session)
+                    if not self._bg_active:  # bg: label 'background' jangan
+                        think.render_state(self.session)  # ditimpa
                     await chat.add_tool_row(event.call_id, event.name,
                                             event.params)
                 elif isinstance(event, AgentToolDone):
-                    think.render_state(self.session)
+                    if not self._bg_active:
+                        think.render_state(self.session)
                     await chat.drop_live_output(event.call_id)
                     await chat.update_tool_row(event.call_id, event.name,
                                                event.success, event.result)
@@ -980,6 +1044,8 @@ class MainScreen(Screen):
         finally:
             dur = time.monotonic() - t0
             dtok = self.session.completion_tokens - tok0
+            was_bg = self._bg_active  # reset SEBELUM render normal
+            self._bg_active = False
             with suppress(Exception):
                 meta = render_meta(self.app.mode_manager.get_mode(),
                                    self.app.cfg.model, dur, dtok)
@@ -990,6 +1056,11 @@ class MainScreen(Screen):
             self._sync_mode_ui()
             inbar.set_busy(False)
             inbar.focus()
+            if was_bg:  # §30: user harus tahu task selesai
+                with suppress(Exception):
+                    await chat.add_info(
+                        "✓ Background selesai — jawaban di atas.")
+                    self.app.notify("Background selesai", timeout=3)
 
     def _apply_research_event(self, ev: dict[str, Any]) -> None:
         """Terapkan satu event orchestrator ke SourcesPanel (jalan di app loop)."""
@@ -1027,7 +1098,8 @@ class MainScreen(Screen):
         perm = self.query_one(PermissionPopup)
         self.session.status = AgentStatus.WAITING_PERMISSION
         bar.render_state(self.session)
-        think.render_state(self.session)
+        if not self._bg_active:  # bg: label 'background' tetap
+            think.render_state(self.session)
         try:
             # #4: preview diff otomatis sebelum approve commit.
             if tool_name == "git_commit":
@@ -1049,7 +1121,8 @@ class MainScreen(Screen):
             # ("thinking", bukan "running X") sampai event berikutnya.
             self.session.status = AgentStatus.THINKING
             bar.render_state(self.session)
-            think.render_state(self.session)
+            if not self._bg_active:
+                think.render_state(self.session)
 
     async def _ask_user(self, question: str) -> str:
         return await self.app.push_screen(AskDialog(question), wait_for_dismiss=True)

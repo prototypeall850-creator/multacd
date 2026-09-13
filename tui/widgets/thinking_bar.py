@@ -38,6 +38,8 @@ def base_label(state: str) -> str:
         return "thinking"
     if state == "waiting":
         return "waiting for approval"
+    if state == "background":
+        return "background"  # §30: task lanjut di belakang
     return TOOL_LABELS.get(state, f"running {state}...")
 
 
@@ -136,6 +138,7 @@ if __name__ == "__main__":
     assert base_label("idle") == "" and base_label("") == ""
     assert base_label("thinking") == "thinking"
     assert base_label("waiting") == "waiting for approval"
+    assert base_label("background") == "background"  # TUI-R10 §30
     assert base_label("scan_codebase") == "scanning project..."
     assert base_label("run_tests") == "running tests..."
     assert base_label("web_search") == "searching..."
