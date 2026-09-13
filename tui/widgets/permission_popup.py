@@ -20,9 +20,10 @@ import asyncio
 from contextlib import suppress
 from typing import Any
 
+from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Static
 
 from core.permissions import NO_SESSION_APPROVAL, RISKY_TOOLS  # single source of truth
@@ -56,6 +57,35 @@ def prompt_of(tool_name: str, params: dict[str, Any]) -> str:
     return f"{pre}[{name_style}]{name}[/]  [dim]{escape(target_of(params))}[/]{post}"
 
 
+def scope_of(tool_name: str, allow_all: bool) -> str:
+    """Baris scope (§23) dari data nyata checker — bukan fake path pattern.
+
+    Checker approve per nama tool untuk sisa session (core.permissions
+    _session_auto), KECUALI NO_SESSION_APPROVAL (eksekusi kode, research,
+    risky) yang kontraknya sekali pakai. Pure function.
+    """
+    if allow_all:
+        return f"all: {tool_name} sisa session"
+    return "sekali pakai"
+
+
+def detail_text(params: dict[str, Any]) -> Text:
+    """Detail penuh (§24 fullscreen): semua params `key: value`, tanpa markup.
+
+    Nilai >400 char dipotong (ponytail: tanpa scroll — target layar HP;
+    upgrade path: VerticalScroll kalau detail raksasa jadi biasa).
+    """
+    if not params:
+        return Text("(tanpa parameter)")
+    lines = []
+    for k, v in params.items():
+        vs = str(v)
+        if len(vs) > 400:
+            vs = vs[:400] + "…"
+        lines.append(f"{k}: {vs}")
+    return Text("\n".join(lines))
+
+
 def _is_protected_push(params: dict[str, Any]) -> bool:
     """True kalau push ini menyasar branch dilindungi (tanpa opt-in).
 
@@ -87,15 +117,24 @@ class PermissionPopup(Vertical):
         self._future: asyncio.Future[str] | None = None
         self._allow_all = True
         self._extra = ""  # "" | "edit" (git_commit) | "branch" (git_push)
+        self._fullscreen = False  # §24: Ctrl+F detail penuh
 
     def compose(self) -> ComposeResult:
+        with Horizontal(id="perm-title"):
+            yield Static("", id="perm-title-text")
+            yield Static("esc", classes="perm-esc")
         yield Static("", id="perm-prompt")
+        yield Static("", id="perm-scope")
+        with VerticalScroll(id="perm-detail"):
+            yield Static("", id="perm-detail-text")
         with Horizontal(id="perm-buttons"):
             yield Button("Yes (Y)", id="perm-yes", variant="success")
             yield Button("Edit (E)", id="perm-extra-edit", variant="primary")
             yield Button("Branch (B)", id="perm-extra-branch", variant="primary")
             yield Button("No (N)", id="perm-no", variant="error")
             yield Button("All (A)", id="perm-all", variant="warning")
+        yield Static("← → select · enter · esc no · ctrl+f detail",
+                     id="perm-hint")
 
     async def ask(self, tool_name: str, params: dict[str, Any]) -> str:
         """Tampilkan popup, tunggu tombol/keyboard.
@@ -117,9 +156,17 @@ class PermissionPopup(Vertical):
             self._extra = ""
         self.query_one("#perm-prompt", Static).update(
             prompt_of(tool_name, params))
+        self.query_one("#perm-title-text", Static).update(
+            f"[bold]{icons.icon('warning')} Permission required[/]")
+        self.query_one("#perm-scope", Static).update(
+            f"[dim]{escape(scope_of(tool_name, self._allow_all))}[/]")
+        self.query_one("#perm-detail-text", Static).update(
+            detail_text(params))
         self.query_one("#perm-all", Button).display = self._allow_all
         self.query_one("#perm-extra-edit", Button).display = self._extra == "edit"
         self.query_one("#perm-extra-branch", Button).display = self._extra == "branch"
+        if self._fullscreen:  # mulai compact selalu (§24)
+            self._toggle_fullscreen()
         self.display = True
         self.query_one("#perm-yes", Button).focus()
         try:
@@ -143,9 +190,24 @@ class PermissionPopup(Vertical):
         if self._future is not None and not self._future.done():
             self._future.set_result(value)
 
+    def _toggle_fullscreen(self) -> None:
+        """§24: compact ↔ fullscreen detail (Ctrl+F / Esc saat fullscreen)."""
+        self._fullscreen = not self._fullscreen
+        if self._fullscreen:
+            self.add_class("fullscreen")
+        else:
+            self.remove_class("fullscreen")
+
     def answer_key(self, key: str) -> bool:
-        """Rute Y/N/A/E/B/Enter/Esc/arrows. True kalau dikonsumsi."""
+        """Rute Y/N/A/E/B/Ctrl+F/Enter/Esc/arrows. True kalau dikonsumsi."""
         key = key.lower()
+        if key == "ctrl+f":
+            self._toggle_fullscreen()
+            return True
+        if key == "escape" and self._fullscreen:
+            # §24: esc di fullscreen = balik compact, BUKAN jawaban no.
+            self._toggle_fullscreen()
+            return True
         if key == "y":
             self._resolve("yes")
             return True
@@ -238,6 +300,15 @@ if __name__ == "__main__":
     assert bar.answer_key("e")
     bar._extra = "branch"
     assert bar.answer_key("b")
+    # TUI-R11 §23: scope dari data checker (per tool, bukan fake pattern).
+    assert scope_of("bash", True) == "all: bash sisa session"
+    assert scope_of("run_python", False) == "sekali pakai"
+    # TUI-R11 §24: detail penuh = params utuh, tanpa markup (aman bracket).
+    dt = detail_text({"command": 'ls [a-z]*', "path": "a b.py"})
+    assert "command: ls [a-z]*" in dt.plain and "path: a b.py" in dt.plain
+    assert detail_text({}).plain == "(tanpa parameter)"
+    long = detail_text({"c": "x" * 500})
+    assert len(long.plain) < 450 and long.plain.endswith("…")
     # #29: target/pesan berisi bracket → prompt tetap valid markup.
     from textual.content import Content as _Content
     nasty: dict[str, Any] = {"command": 'ls [a-z]* [x=y="list_dir", z]'}
