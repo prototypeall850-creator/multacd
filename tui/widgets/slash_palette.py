@@ -11,6 +11,8 @@ Digerakkan MainScreen (on_text_area_changed) + InputBar (tombol nav).
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 from rich.text import Text
 from textual.containers import Vertical
 from textual.widgets import Label, ListItem, ListView, Static
@@ -19,6 +21,20 @@ from core.mode_manager import COMMANDS_WITH_ARGS, PALETTE_COMMANDS
 from tui.markup_safe import tx_escape as escape
 
 MATCH_STYLE = "#b4befe"  # Lavender — highlight bagian yang match
+
+# Kategori TUI-side (TUI-R3 §12) — dari 12 command existing, tanpa ubah core.
+# Header disisip sebagai item disabled (navigasi skip otomatis).
+COMMAND_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Mode", ("/code", "/research", "/personal")),
+    ("Model & provider", ("/model", "/models", "/connect", "/key", "/base")),
+    ("Sesi", ("/clear", "/scan", "/soul", "/help")),
+)
+GROUP_OF = {cmd: grp for grp, cmds in COMMAND_GROUPS for cmd in cmds}
+
+# Shortcut betulan (binding yang benar ada) — jangan fake (TUI-R3 §12).
+COMMAND_KEYS = {"/models": "ctrl+o"}
+
+HEADER_MARK = "##"  # prefix marker item header kategori
 
 
 def _score(needle: str, name: str) -> int | None:
@@ -33,6 +49,20 @@ def _score(needle: str, name: str) -> int | None:
     return None
 
 
+def _ranked(needle: str) -> list[tuple[int, str, str]]:
+    """(skor, cmd, desc) terurut. Inti match_commands + grouped_matches."""
+    needle = needle.strip().lower()
+    if not needle:
+        return [(0, cmd, desc) for cmd, desc in PALETTE_COMMANDS]
+    scored: list[tuple[int, str, str]] = []
+    for cmd, desc in PALETTE_COMMANDS:
+        s = _score(needle, cmd[1:].lower())
+        if s is not None:
+            scored.append((s, cmd, desc))
+    scored.sort(key=lambda x: (x[0], x[1]))
+    return scored
+
+
 def match_commands(typed: str) -> list[tuple[str, str]]:
     """Filter command fuzzy berperingkat (case-insensitive). Pure function.
 
@@ -40,24 +70,38 @@ def match_commands(typed: str) -> list[tuple[str, str]]:
     Urut: prefix dulu, lalu substring, lalu subsequence. v2 full-bebas:
     '/md' ketemu '/model', 'R' tetap '/research' paling atas.
     """
-    needle = typed.strip().lower()
-    if not needle:
-        return list(PALETTE_COMMANDS)
-    scored: list[tuple[int, str, str]] = []
-    for cmd, desc in PALETTE_COMMANDS:
-        s = _score(needle, cmd[1:].lower())
-        if s is not None:
-            scored.append((s, cmd, desc))
-    scored.sort(key=lambda x: (x[0], x[1]))
-    return [(c, d) for _, c, d in scored]
+    return [(c, d) for _, c, d in _ranked(typed)]
+
+
+def grouped_matches(typed: str) -> list[tuple[str, str]]:
+    """Matches + header kategori ('##Grup', ''). Pure function (TUI-R3).
+
+    Tanpa re-skor per grup (ranking fuzzy global dipakai); grup kosong
+    disembunyikan. Urutan grup ikut COMMAND_GROUPS.
+    """
+    items: list[tuple[str, str]] = []
+    for grp, _cmds in COMMAND_GROUPS:
+        rows = [(c, d) for _, c, d in _ranked(typed)
+                if GROUP_OF.get(c) == grp]
+        if rows:
+            items.append((HEADER_MARK + grp, ""))
+            items.extend(rows)
+    return items
+
+
+def is_header(item: tuple[str, str]) -> bool:
+    """True kalau item adalah header kategori (bukan command)."""
+    return item[0].startswith(HEADER_MARK)
 
 
 def render_item(cmd: str, desc: str, needle: str) -> Text:
-    """'model' match lavender. Pure function."""
+    """'model' match lavender + shortcut kanan (kalau ada). Pure function."""
     t = Text()
     t.append(cmd[:1 + len(needle)], style=f"bold {MATCH_STYLE}")
     t.append(cmd[1 + len(needle):])
     t.append(f"      {desc}", style="dim")
+    if key := COMMAND_KEYS.get(cmd):
+        t.append(f"  ·  {key}", style="dim")
     return t
 
 
@@ -69,6 +113,7 @@ class SlashPalette(Vertical):
         self._matches: list[tuple[str, str]] = []
         self._index = 0
         self._needle = ""
+        self._overlay = False  # True = dibuka via Ctrl+P (centered overlay)
         self.suppress_next = False  # set saat autocomplete (cukup 1 Changed)
 
     def compose(self):
@@ -80,32 +125,56 @@ class SlashPalette(Vertical):
         return self.display
 
     @property
+    def overlay_open(self) -> bool:
+        """Palette mode overlay Ctrl+P (input = search field)."""
+        return self.display and self._overlay
+
+    @property
     def selected_command(self) -> str | None:
         if not self._matches:
             return None
-        return self._matches[self._index][0]
+        cmd = self._matches[self._index][0]
+        return None if is_header((cmd, "")) else cmd
 
-    def open(self, needle: str) -> None:
+    def open(self, needle: str, overlay: bool = False) -> None:
         self._needle = needle
-        self._matches = match_commands(needle)
-        self._index = 0
+        self._overlay = overlay
+        if overlay:
+            self.add_class("overlay")
+        self._matches = grouped_matches(needle)
+        self._index = self._first_command(0)
         self._rebuild()
         self.display = True
 
     def refilter(self, needle: str) -> None:
         if not self.display:
             return
-        self.open(needle)
+        self.open(needle, overlay=self._overlay)
 
     def close(self) -> None:
         self.display = False
+        self._overlay = False
+        with suppress(Exception):
+            self.remove_class("overlay")
         self._matches = []
         self._index = 0
+
+    def _first_command(self, start: int) -> int:
+        """Index command pertama non-header dari start (header di-skip)."""
+        i = start
+        while i < len(self._matches) and is_header(self._matches[i]):
+            i += 1
+        return i
 
     def move(self, delta: int) -> None:
         if not self._matches:
             return
-        self._index = (self._index + delta) % len(self._matches)
+        i = self._index
+        for _ in range(len(self._matches)):
+            i = (i + delta) % len(self._matches)
+            if not is_header(self._matches[i]):
+                break
+        self._index = i
         self._highlight()
 
     def _rebuild(self) -> None:
@@ -119,7 +188,12 @@ class SlashPalette(Vertical):
                 f"(tidak ada yang cocok: /{escape(self._needle)})")))
             return
         for cmd, desc in self._matches:
-            lst.append(ListItem(Label(render_item(cmd, desc, self._needle))))
+            if is_header((cmd, "")):
+                lst.append(ListItem(
+                    Label(f"{cmd[len(HEADER_MARK):]}", classes="slash-group"),
+                    disabled=True))  # header tak selectable/klik
+            else:
+                lst.append(ListItem(Label(render_item(cmd, desc, self._needle))))
         self._highlight()
 
     def _highlight(self) -> None:
@@ -159,4 +233,23 @@ if __name__ == "__main__":
     assert match_commands("zzz") == []
     t = render_item("/model", "Switch", "mo")
     assert str(t) == "/model      Switch"
-    print("✅ slash_palette self-test OK (fuzzy + render)")
+    assert "ctrl+o" in str(render_item("/models", "Browse", "mo"))
+    assert "ctrl+" not in str(render_item("/model", "Switch", "mo"))
+    # TUI-R3: grouping — 12 command + 3 header, ranking global tetap.
+    g = grouped_matches("")
+    assert len(g) == 15, len(g)
+    assert [c for c, _ in g if is_header((c, ""))] == ["##Mode", "##Model & provider", "##Sesi"]
+    assert [c for c, _ in grouped_matches("mo") if not is_header((c, ""))] == ["/model", "/models"]
+    assert [c for c, _ in grouped_matches("zzz")] == []
+    assert is_header(("##Mode", "")) and not is_header(("/model", "x"))
+    # Navigasi skip header (konstruktor beneran, tanpa mount).
+    pal = SlashPalette()
+    pal.open("", overlay=True)
+    assert pal.overlay_open is True
+    assert pal.selected_command == "/code"
+    pal.move(3)  # /code → ... skip header, tetap command
+    assert pal.selected_command is not None
+    assert not is_header((pal._matches[pal._index][0], ""))
+    pal.close()
+    assert pal.overlay_open is False and pal._matches == []
+    print("✅ slash_palette self-test OK (fuzzy + render + grup)")

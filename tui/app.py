@@ -27,6 +27,10 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 class MultacdApp(App[None]):
     """App TUI. `config` wajib valid; `llm_client` opsional (buat test)."""
 
+    # TUI-R3: Ctrl+P milik SlashPalette kita. Palette bawaan Textual
+    # (priority binding yang selalu menang) dimatikan via opt-out resmi.
+    ENABLE_COMMAND_PALETTE = False
+
     BINDINGS = [
         # priority=True: menang atas binding widget fokus (mis. Ctrl+C = copy di Input).
         Binding("ctrl+c", "safe_quit", "Quit", priority=True),

@@ -56,6 +56,7 @@ class MainScreen(Screen):
         ("ctrl+o", "open_models", "Models"),
         ("ctrl+i", "toggle_info", "Info"),
         ("ctrl+y", "copy_last", "Copy"),
+        ("ctrl+p", "open_palette", "Commands"),
     ]
 
     CSS = """
@@ -126,6 +127,18 @@ class MainScreen(Screen):
         border: solid $primary;
         background: $surface;
         padding: 0 1;
+    }
+    #slash-palette.overlay {
+        position: absolute;
+        /* offset-% resolve ke ukuran sendiri: 33% x 60% = 20% layar,
+           center horizontal di semua lebar. y scalar: di bawah bar atas. */
+        offset: 33% 4;
+        width: 60%;
+        max-height: 60%;
+    }
+    #slash-palette .slash-group {
+        color: $text-muted;
+        text-style: bold;
     }
     #model-selector {
         display: none;
@@ -459,6 +472,11 @@ class MainScreen(Screen):
                 return
             sel.close()  # user ketik / → keluar mode selector
         pal = self.query_one(SlashPalette)
+        if pal.overlay_open:
+            # Mode Ctrl+P: input = search field (teks apa pun = filter).
+            needle = text[1:] if text.startswith("/") else text
+            pal.refilter(needle.split(" ")[0].split("\n")[0])
+            return
         if pal.suppress_next:
             pal.suppress_next = False
             pal.close()
@@ -467,6 +485,18 @@ class MainScreen(Screen):
             pal.open(text[1:])
         else:
             pal.close()
+
+    def action_open_palette(self) -> None:
+        """Ctrl+P: command palette overlay (reuse SlashPalette, TUI-R3)."""
+        pal = self.query_one(SlashPalette)
+        inbar = self.query_one(InputBar)
+        if pal.overlay_open:
+            pal.close()
+            inbar.focus()
+            return
+        pal.close()  # reset mode inline kalau sedang terbuka
+        pal.open("", overlay=True)
+        inbar.focus()
 
     def palette_select(self) -> None:
         """Enter/klik di palette: submit (atau autocomplete kalau butuh arg)."""

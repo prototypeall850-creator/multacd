@@ -12,8 +12,8 @@ from pathlib import Path
 from rich.text import Text
 from textual.widgets import Static
 
-FULL_HINTS = "ctrl+o models · / commands · ctrl+i panel"
-SHORT_HINTS = "ctrl+o · / · ctrl+i"
+FULL_HINTS = "ctrl+p commands · / · ctrl+o models · ctrl+i panel"
+SHORT_HINTS = "ctrl+p · / · ctrl+o · ctrl+i"
 
 
 def short_workdir(path: str, max_cols: int = 32) -> str:
