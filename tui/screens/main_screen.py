@@ -7,12 +7,11 @@ import time
 from contextlib import suppress
 from typing import Any
 
-from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import Static, TextArea
+from textual.widgets import TextArea
 
 from core.agent_events import (
     AgentContinue,
@@ -36,14 +35,13 @@ from tui.widgets.input_bar import InputBar, InputSubmitted
 from tui.widgets.model_selector import ModelSelector
 from tui.widgets.permission_popup import PermissionPopup
 from tui.widgets.provider_selector import ProviderSelector
-from tui.widgets.session_bar import SessionBar
 from tui.widgets.slash_palette import SlashPalette
 from tui.widgets.sources_panel import (
     ExportResearchRequested,
     SourcePreviewRequested,
     SourcesPanel,
 )
-from tui.widgets.status_bar import StatusBar, agent_status_for
+from tui.widgets.status_bar import StatusBar
 from tui.widgets.thinking_bar import ThinkingBar
 
 
@@ -64,12 +62,7 @@ class MainScreen(Screen):
     MainScreen {
         layout: vertical;
     }
-    #session-bar {
-        height: 1;
-        background: $surface;
-        padding: 0 1;
-    }
-    #status-bar {
+    #top-bar {
         height: 1;
         background: $surface;
         padding: 0 1;
@@ -106,7 +99,7 @@ class MainScreen(Screen):
     #context-sidebar {
         width: 24%;
         min-width: 22;
-        border-left: solid $primary;
+        border-left: solid $panel;
         padding: 0 1;
     }
     #mcp-body {
@@ -172,13 +165,8 @@ class MainScreen(Screen):
         padding: 0 1;
     }
     #input-bar {
-        height: 5;
+        height: 3;
         border: solid $primary;
-    }
-    #input-meta {
-        height: 1;
-        padding: 0 1;
-        color: $text-muted;
     }
     #footer-bar {
         height: 1;
@@ -201,6 +189,9 @@ class MainScreen(Screen):
         self._sidebar_manual: bool | None = None
         self._last_layout: object | None = None
         self._last_size: tuple[int, int] = (0, 0)
+        # TUI-R7: batas grow input (dari ShellLayout saat _apply_layout).
+        self._input_base = 3
+        self._input_max = 8
 
     @property
     def _turn_running(self) -> bool:
@@ -215,8 +206,7 @@ class MainScreen(Screen):
             self.session.end_turn()
 
     def compose(self) -> ComposeResult:
-        yield SessionBar()
-        yield StatusBar()
+        yield StatusBar()  # top bar TUI-R7: app · session · mode · status
         with Horizontal(id="body"):
             yield ChatPanel()
             yield ProjectTree(self.app.workdir)
@@ -228,15 +218,12 @@ class MainScreen(Screen):
         yield SlashPalette()
         yield ModelSelector()
         yield ProviderSelector()
-        yield Static("", id="input-meta")
         yield InputBar()
         yield FooterBar()
 
     def on_mount(self) -> None:
         bar = self.query_one(StatusBar)
-        bar.set_model(self.app.cfg.model)
         bar.set_mode(self.app.mode_manager.get_mode())
-        bar.set_git(self.app.git_summary)
         bar.render_state(self.session)  # IDLE awal — dari state, konsisten R5
         self._refresh_shell()
         self._apply_layout(*self._layout_size())
@@ -255,7 +242,7 @@ class MainScreen(Screen):
         while True:
             await asyncio.sleep(60 if _min() else 10)
             try:
-                bar = self.query_one(StatusBar)
+                self.query_one(StatusBar)
             except Exception:
                 return  # screen sudah di-unmount
             try:
@@ -263,7 +250,8 @@ class MainScreen(Screen):
             except Exception:
                 continue
             self.app.git_summary = summary
-            bar.set_git(summary)
+            # TUI-R7: git canonical di sidebar (bukan top bar).
+            self._refresh_info()
 
     async def _maybe_update_notice(self) -> None:
         """Cek update di background; tampil sekali di chat kalau ada versi baru."""
@@ -296,12 +284,9 @@ class MainScreen(Screen):
         )
 
     def _sync_mode_ui(self) -> None:
-        """Samakan status bar + composer dengan mode/model aktif."""
+        """Samakan top bar + composer dengan mode/model aktif."""
         mm = self.app.mode_manager
-        bar = self.query_one(StatusBar)
-        bar.set_mode(mm.get_mode())
-        bar.set_model(self.app.cfg.model)
-        bar.set_git(self.app.git_summary)
+        self.query_one(StatusBar).set_mode(mm.get_mode())
         self.app.composer.update_mode(mm.get_mode_prompt())
         # Keluar /research → sembunyikan panel sumber (lihat PLAN-phase3 §10).
         panel = self.query_one(SourcesPanel)
@@ -361,17 +346,12 @@ class MainScreen(Screen):
         return tokens_s, cost_s
 
     def _refresh_shell(self) -> None:
-        """Sync session bar + input meta + footer + MCP (TUI-R1).
+        """Sync top bar + footer + MCP (TUI-R7 recompose).
 
         Read-only dari state existing. Tak pernah raise.
         """
         with suppress(Exception):
-            self.query_one(SessionBar).set_title(self.app.project_label or "—")
-        with suppress(Exception):
-            mode = self.app.mode_manager.get_mode()
-            short = (self.app.cfg.model or "?").split("/")[-1][:28]
-            self.query_one("#input-meta", Static).update(
-                Text(f"{mode} · {short}", style="dim"))
+            self.query_one(StatusBar).set_title(self.app.project_label or "—")
         with suppress(Exception):
             tokens_s, cost_s = self._usage_strings()
             work = short_workdir(str(self.app.workdir))
@@ -400,6 +380,8 @@ class MainScreen(Screen):
         from tui.layout import layout_for_width
         self._last_size = (width, height)
         lay = layout_for_width(width, self._sidebar_manual, height)
+        self._input_base = lay.input_base
+        self._input_max = lay.input_max
         if lay != self._last_layout:
             self._last_layout = lay
             with suppress(Exception):
@@ -407,9 +389,23 @@ class MainScreen(Screen):
                 sidebar.display = lay.sidebar_visible
                 sidebar.styles.width = lay.sidebar_width
             with suppress(Exception):
-                self.query_one(InputBar).styles.height = lay.input_height
+                # TUI-R7: input = base (grow multiline ditangani on changed).
+                inp = self.query_one(InputBar)
+                inp.styles.height = lay.input_base
+                self._fit_input(inp.text)
         with suppress(Exception):
             self.query_one(FooterBar).set_compact(lay.footer_compact)
+
+    def _fit_input(self, text: str) -> None:
+        """Tinggi input = 1 baris konten + border, tumbuh sampai cap (§16).
+
+        TUI-R7: input tidak oversized saat kosong; multiline tetap muat.
+        """
+        with suppress(Exception):
+            inp = self.query_one(InputBar)
+            lines = text.count("\n") + 1
+            inp.styles.height = min(self._input_base + lines - 1,
+                                    self._input_max)
 
     def _refresh_info(self) -> None:
         """Update info panel (kalau sidebar tampil) — tak pernah raise."""
@@ -440,7 +436,6 @@ class MainScreen(Screen):
                     git_s += f" +{git['modified']}"
             data: dict = {
                 "mode": self.app.mode_manager.get_mode(),
-                "project": self.app.project_label,
                 "git": git_s,
                 "tokens": tokens_s,
                 "prompt": prompt_s,
@@ -449,7 +444,6 @@ class MainScreen(Screen):
                 "messages": len(self.app.context),
                 "tools": self.session.tool_count,
                 "model": self.app.cfg.model,
-                "status": agent_status_for(self.session.status),
             }
             if data["mode"] == "research":
                 try:
@@ -492,6 +486,7 @@ class MainScreen(Screen):
         """Ketik / di awal input → buka palette, filter real-time."""
         if event.text_area.id != "input-bar":
             return
+        self._fit_input(event.text_area.text)  # TUI-R7: grow/shrink
         text = event.text_area.text
         sel = self.query_one(ModelSelector)
         if sel.is_open:

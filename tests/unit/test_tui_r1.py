@@ -1,36 +1,38 @@
-"""Unit: shell TUI-R1 — layout breakpoint + bar/sidebar/footer (headless)."""
+"""Unit: shell TUI-R1/R7 — layout breakpoint + top bar/sidebar/footer."""
 
 from __future__ import annotations
 
 from tui.layout import ShellLayout, layout_for_width
 from tui.widgets.context_sidebar import get_mcp_servers, render_mcp
 from tui.widgets.footer_bar import render_footer, short_workdir
-from tui.widgets.session_bar import render_session_title
+from tui.widgets.status_bar import render_session_title
 
 
-def test_breakpoints_brief():
-    assert layout_for_width(160) == ShellLayout(True, "24%", False, 5)
-    assert layout_for_width(120).sidebar_width == "24%"
-    assert layout_for_width(119) == ShellLayout(True, "18%", False, 5)
-    assert layout_for_width(90).sidebar_visible is True
-    assert layout_for_width(89) == ShellLayout(False, "18%", False, 5)
+def test_breakpoints_brief_v2():
+    # TUI-R7 (§9): >=140 sidebar 24% · 110-139 18% · <110 hidden.
+    assert layout_for_width(160) == ShellLayout(True, "24%", False, 3, 8)
+    assert layout_for_width(140).sidebar_width == "24%"
+    assert layout_for_width(139) == ShellLayout(True, "18%", False, 3, 8)
+    assert layout_for_width(110).sidebar_visible is True
+    assert layout_for_width(109) == ShellLayout(False, "18%", False, 3, 8)
     assert layout_for_width(80).sidebar_visible is False
 
 
 def test_manual_override_ctrl_i():
     assert layout_for_width(160, False).sidebar_visible is False
-    assert layout_for_width(80, True) == ShellLayout(True, "45%", False, 5)
+    assert layout_for_width(80, True) == ShellLayout(True, "45%", False, 3, 8)
     assert layout_for_width(160, True).sidebar_width == "24%"
     assert layout_for_width(80, False).sidebar_visible is False
     assert layout_for_width(80, None).sidebar_visible is False
 
 
-def test_input_height_short_screens():
-    assert layout_for_width(120, None, 40).input_height == 5
-    assert layout_for_width(120, None, 30).input_height == 5
-    assert layout_for_width(80, None, 29).input_height == 3
-    assert layout_for_width(80, None, 24).input_height == 3
-    assert layout_for_width(80, True, 24) == ShellLayout(True, "45%", False, 3)
+def test_input_grow_caps():
+    # TUI-R7: base 3 (1 konten + border); cap 8 desktop, 5 layar pendek.
+    assert layout_for_width(120, None, 40).input_base == 3
+    assert layout_for_width(120, None, 40).input_max == 8
+    assert layout_for_width(80, None, 29).input_max == 5
+    assert layout_for_width(80, None, 24).input_max == 5
+    assert layout_for_width(80, True, 24) == ShellLayout(True, "45%", False, 3, 5)
 
 
 def test_footer_compact_narrow():
@@ -71,12 +73,14 @@ def test_mcp_empty_honest():
 def test_widgets_no_crash_unmounted():
     from tui.widgets.context_sidebar import ContextSidebar
     from tui.widgets.footer_bar import FooterBar
-    from tui.widgets.session_bar import SessionBar
+    from tui.widgets.status_bar import TopBar
 
-    bar = SessionBar.__new__(SessionBar)
-    bar._title = ""
-    SessionBar.set_title(bar, "myapp")
+    bar = TopBar.__new__(TopBar)
+    bar._title = bar._mode = bar._status = ""
+    TopBar.set_title(bar, "myapp")
     assert bar._title == "myapp"
+    TopBar.set_status(bar, "thinking")
+    assert bar._status == "thinking"
 
     foot = FooterBar.__new__(FooterBar)
     foot._workdir, foot._usage, foot._compact = "?", "—", False

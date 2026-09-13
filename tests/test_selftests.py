@@ -57,7 +57,6 @@ SELF_TEST_MODULES = [
     "tui.widgets.status_bar",
     "tui.widgets.info_panel",
     "tui.layout",
-    "tui.widgets.session_bar",
     "tui.widgets.context_sidebar",
     "tui.widgets.footer_bar",
     "tui.widgets.provider_selector",

@@ -1,6 +1,13 @@
-"""Status bar — 1 baris di atas: nama app · mode · model · status."""
+"""Top bar TUI-R7 — SATU baris tipis: app · session · mode · status.
+
+Recompose dari SessionBar+StatusBar lama: identity + session + mode +
+status dot. Model/git/token punya tempat lain (sidebar + meta jawaban)
+— §5 TUI_REDESIGN_V2: jangan numpuk di top.
+"""
 
 from __future__ import annotations
+
+from contextlib import suppress
 
 from rich.text import Text
 from textual.widgets import Static
@@ -21,20 +28,25 @@ def agent_status_for(status: object) -> str:
     return "idle"
 
 
-class StatusBar(Static):
-    """Contoh: multacd  ·  code  ·  groq/llama-3.3  ·  idle
-    (glyph via tui.icons — ikut level nerdfonts/unicode/ascii)."""
+def render_session_title(title: str, max_cols: int = 24) -> str:
+    """Judul sesi bersih + potong kalau kepanjangan. Pure function."""
+    title = (title or "").strip()
+    if not title:
+        return "—"
+    return title if len(title) <= max_cols else title[:max_cols - 1] + "…"
+
+
+class TopBar(Static):
+    """Baris paling atas: `● multacd · <judul> · <mode> · ● <status>`."""
 
     def __init__(self) -> None:
-        super().__init__("", id="status-bar")
+        super().__init__("", id="top-bar")
+        self._title = ""
         self._mode = "coding"
-        self._model = "?"
         self._status = "idle"
-        self._git = ""
 
-    def set_model(self, model: str) -> None:
-        short = model.split("/")[-1]
-        self._model = short if len(short) <= 28 else short[:27] + "…"
+    def set_title(self, title: str) -> None:
+        self._title = render_session_title(title)
         self._refresh()
 
     def set_mode(self, mode: str) -> None:
@@ -53,28 +65,8 @@ class StatusBar(Static):
         """
         self.set_status(agent_status_for(state.status))
 
-    def set_git(self, summary: dict) -> None:
-        """Tampilkan branch + file berubah. Bukan repo → sembunyi (v2).
-
-        DESIGN lama tulis 'no git' — di layar HP itu sampah kolom,
-        jadi v2 full-bebas: bukan repo = segmen hilang total.
-        """
-        if not summary.get("is_repo"):
-            self._git = ""
-        else:
-            parts = [f"{icons.icon('branch')} {summary.get('branch', '?')}"]
-            if summary.get("modified"):
-                parts.append(f"{icons.icon('modified')}{summary['modified']}")
-            if summary.get("untracked"):
-                parts.append(f"{icons.icon('added')}{summary['untracked']}")
-            self._git = " ".join(parts)
-        self._refresh()
-
     def render_compact(self, max_cols: int = 40) -> str:
-        """String ringkas buat Termux: 'multacd · mode · status'.
-
-        Pure (tanpa update widget) — gampang dites + dipakai saat narrow.
-        """
+        """String ringkas buat Termux: 'multacd · mode · status'. Pure."""
         return f"multacd · {self._mode} · {self._status}"[:max_cols]
 
     def _refresh(self) -> None:
@@ -85,24 +77,23 @@ class StatusBar(Static):
         mode_color = {"code": "green", "research": "blue", "personal": "magenta"}.get(
             self._mode, "bold"
         )
-        # Termux sempit (<70 kolom): model + git dibuang, sisa esensi.
-        compact = _tok.narrow()
         t = Text()
         t.append(f"{icons.icon('app')} multacd", style="bold cyan")
+        t.append(f"  ·  {self._title}", style="bold")
         t.append(f"  ·  {icons.icon('mode')} ", style="dim")
         t.append(self._mode, style=mode_color)
-        if not compact:
+        if not _tok.narrow():
             t.append("  ·  ", style="dim")
-            t.append(self._model, style="magenta")
-            if self._git:
-                t.append("  ·  ", style="dim")
-                t.append(self._git, style="yellow")
-        t.append("  ·  ", style="dim")
-        dot = {"idle": icons.icon("success"), "thinking": icons.icon("pending"),
-               "waiting": icons.icon("warning")}.get(self._status, "●")
-        t.append(f"{dot} ", style=f"bold {dot_color}")
-        t.append(self._status, style=dot_color)
-        self.update(t)
+            dot = {"idle": icons.icon("success"), "thinking": icons.icon("pending"),
+                   "waiting": icons.icon("warning")}.get(self._status, "●")
+            t.append(f"{dot} ", style=f"bold {dot_color}")
+            t.append(self._status, style=dot_color)
+        with suppress(Exception):  # belum mount saat dipanggil dari test
+            self.update(t)
+
+
+# Kompat: nama lama dipakai main_screen + test (R5). Alias ke TopBar.
+StatusBar = TopBar
 
 
 if __name__ == "__main__":
@@ -112,5 +103,15 @@ if __name__ == "__main__":
     assert agent_status_for(_S.EXECUTING_TOOL) == "thinking"
     assert agent_status_for(_S.WAITING_PERMISSION) == "waiting"
     assert agent_status_for(_S.WAITING_USER) == "waiting"
-    assert StatusBar().render_compact().startswith("multacd")
-    print("✅ status_bar self-test OK (mapping + compact)")
+    assert TopBar().render_compact().startswith("multacd")
+    assert render_session_title("myapp") == "myapp"
+    assert render_session_title("") == "—"
+    assert render_session_title("  ") == "—"
+    assert len(render_session_title("x" * 40)) == 24
+    bar = TopBar.__new__(TopBar)
+    bar._title = bar._mode = bar._status = ""
+    TopBar.set_title(bar, "  myapp  ")
+    assert bar._title == "myapp", bar._title
+    TopBar.set_status(bar, "thinking")
+    assert bar._status == "thinking"
+    print("✅ status_bar self-test OK (top bar + mapping + compact)")
