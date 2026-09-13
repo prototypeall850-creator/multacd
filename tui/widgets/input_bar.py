@@ -23,8 +23,8 @@ class InputSubmitted(Message):
 class InputBar(TextArea):
     """TextArea yang di-hijack: Enter = kirim, Shift+Enter = newline."""
 
-    def __init__(self) -> None:
-        super().__init__("", id="input-bar", language=None)
+    def __init__(self, id: str = "input-bar") -> None:
+        super().__init__("", id=id, language=None)
         self.show_line_numbers = False
         # TUI-R7: tanpa border_title — hints permanen = dinding shortcut
         # (§17: shortcut utama cukup di footer).

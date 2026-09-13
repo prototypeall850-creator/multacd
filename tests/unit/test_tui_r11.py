@@ -11,6 +11,7 @@ os.environ.setdefault("MULTACD_HOME", "/tmp/opencode/test-r11")
 
 from core.config import Config
 from tui.app import MultacdApp
+from tui.widgets.fresh_layer import FreshScreen
 from tui.widgets.input_bar import InputBar
 from tui.widgets.permission_popup import PermissionPopup, scope_of
 
@@ -23,6 +24,8 @@ def app():
 async def _open(app, pilot, tool="bash",
                 params=None):
     """Mulai ask() di background worker; balikin popup + future handle."""
+    if isinstance(app.screen, FreshScreen):  # R13: pop layar awal (sekali)
+        await app.pop_screen()
     perm = app.main_screen.query_one(PermissionPopup)
     task = asyncio.ensure_future(perm.ask(tool, params or {"command": "ls"}))
     for _ in range(4):
