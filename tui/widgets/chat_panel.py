@@ -32,7 +32,7 @@ def render_meta(mode: str, model: str, secs: float, tok: int) -> str:
 class ChatPanel(VerticalScroll):
     """Kontainer vertikal; tiap pesan di-mount sebagai widget sendiri."""
 
-    LIVE_LINES = 12  # baris live per tool (cukup buat rasa hidup di HP)
+    LIVE_LINES = 6  # baris live per tool (§14: compact; penuhnya di expanded)
 
     DEFAULT_CSS = """
     ChatPanel .assistant-md {

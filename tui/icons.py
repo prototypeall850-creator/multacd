@@ -38,6 +38,8 @@ _ICONS: dict[str, tuple[str, str, str]] = {
     "warning": ("", "!", "[!]"),
     "pending": ("…", "..", "[..]"),
     "running": ("\uf054", ">", ">>"),
+    "background": ("↗", "^", "[BG]"),        # §14: ↗ background
+    "cancelled": ("■", "■", "[X]"),          # §14: ■ cancelled
     "modified": ("●", "+", "[M]"),
     "added": ("\uf067", "+", "[A]"),
     "deleted": ("\uf068", "-", "[D]"),

@@ -27,6 +27,24 @@ from tui.markup_safe import tx_escape as escape
 MAX_DETAIL_CHARS = 1500
 MAX_DETAIL_LINES = 20
 
+# §15: tool shell-family → body expanded diawali `$ <command>`.
+SHELL_TOOLS = {"bash", "shell"}
+
+
+def state_glyph(state: str) -> str:
+    """Mapping state → glyph semantik (§14, pure). icon+text, bukan warna.
+
+    running → '→' keluarga · done → '✓' keluarga · failed → 'x' keluarga ·
+    background → '↗' · cancelled → '■'. Level ikut tui.icons (nerd/uni/ascii).
+    """
+    return {
+        "running": icons.icon("running"),
+        "done": icons.icon("success"),
+        "failed": icons.icon("error"),
+        "background": icons.icon("background"),
+        "cancelled": icons.icon("cancelled"),
+    }.get(state, "")
+
 
 def target_of(params: dict[str, Any]) -> str:
     target = (params.get("path") or params.get("command")
@@ -81,31 +99,52 @@ def head_markup(name: str, target: str, done: bool, success: bool) -> str:
     name, target = escape(name), escape(target)
     if not done:
         status = f" [blue]{icons.icon('pending')}[/]"
-        return (f"[blue]{icons.icon('running')} {name}[/]"
+        return (f"[blue]{state_glyph('running')} {name}[/]"
                 f"  [dim]{target}[/]{status}  {mark}")
     if success:
-        status = f" [green]{icons.icon('success')}[/]"
+        status = f" [green]{state_glyph('done')}[/]"
         return (f"[green]{name}[/]  [dim]{target}[/]{status}  {mark}")
-    status = f" [red]{icons.icon('error')}[/]"
+    status = f" [red]{state_glyph('failed')}[/]"
     return (f"[red]{name}[/]  [dim]{target}[/]{status}  {mark}")
 
 
-def body_text(summary: str, detail: str) -> Text:
-    """Body expanded sebagai Rich Text (hasil tool mentah, tanpa markup)."""
-    body = summary
+def body_text(summary: str, detail: str, command: str = "") -> Text:
+    """Body expanded sebagai Rich Text (hasil tool mentah, tanpa markup).
+
+    §15: tool shell-family → `$ <command>` dulu, baru output.
+    """
+    parts: list[str] = []
+    if command:
+        parts.append(f"$ {command}")
+    if summary:
+        parts.append(summary)
     if detail:
-        body += "\n─────\n" + truncate_detail(detail)
-    return Text(body or "(tidak ada detail)")
+        parts.append("─────\n" + truncate_detail(detail))
+    return Text("\n".join(parts) or "(tidak ada detail)")
 
 
 class ToolActivity(Vertical):
     """Satu tool call: header (klik/Enter) + body detail (hidden default)."""
+
+    DEFAULT_CSS = """
+    ToolActivity {
+        background: $surface;
+        padding: 0 1;
+        margin: 0 0 1 0;
+    }
+    ToolActivity #tool-body {
+        padding-left: 2;
+        color: $text-muted;
+    }
+    """
 
     def __init__(self, call_id: str, name: str, params: dict[str, Any]) -> None:
         super().__init__(id=f"tool-{call_id}")
         self._call_id = call_id
         self._name = name
         self._target = target_of(params)
+        self._command = (str(params.get("command", ""))
+                         if name in SHELL_TOOLS else "")
         self._collapsed = True
         self._done = False
         self._success = False
@@ -159,9 +198,10 @@ class ToolActivity(Vertical):
         else:
             try:
                 self._head.update(
-                    f"v {escape(self._name)}  {escape(self._target)}  "
-                    f"{icons.icon('collapse')}")
-                self._body.update(body_text(self._summary, self._detail))
+                    f"{icons.icon('collapse')} {escape(self._name)}  "
+                    f"{escape(self._target)}")
+                self._body.update(body_text(self._summary, self._detail,
+                                            self._command))
                 self._body.display = True
             except Exception:
                 pass
@@ -182,10 +222,20 @@ if __name__ == "__main__":
     assert (s, d) == ("", "")
     t = truncate_detail("\n".join(f"l{i}" for i in range(30)))
     assert len(t.splitlines()) == 21 and t.endswith("(dipotong)"), t[-20:]
+    # TUI-R9 §14: lima state punya glyph non-kosong + unik per pasangan.
+    glyphs = {st: state_glyph(st) for st in
+              ("running", "done", "failed", "background", "cancelled")}
+    assert all(glyphs.values()) and len(set(glyphs.values())) == 5, glyphs
+    assert state_glyph("ngawur") == ""
     # #29: nama/target berisi bracket → header tetap valid markup.
     nasty = 'ls [a-z]* [x=y="list_dir", z]'
     for _done, _ok in ((False, False), (True, True), (True, False)):
         _Content.from_markup(head_markup("bash", nasty, _done, _ok))
     _Content.from_markup(head_markup(nasty, nasty, True, True))
     assert isinstance(body_text('[x=y="a", b]', "d"), Text)
-    print("✅ tool_activity self-test OK (summarize + truncate + markup)")
+    # TUI-R9 §15: shell → `$ command` dulu, baru output.
+    b = body_text("3 passed", "", command="pytest -q")
+    assert b.plain.startswith("$ pytest -q\n3 passed"), b.plain
+    b2 = body_text("ok", "detail", command="")
+    assert "$" not in b2.plain and "detail" in b2.plain
+    print("✅ tool_activity self-test OK (state + summarize + shell + markup)")
