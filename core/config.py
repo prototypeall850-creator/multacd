@@ -7,6 +7,7 @@ Jalankan langsung untuk test cepat:
 from __future__ import annotations
 
 import os
+import re
 import sys
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -29,6 +30,8 @@ EXAMPLE_CONFIG = """\
 # ── Model (wajib diisi) ──────────────────────────────
 model: "anthropic/claude-sonnet-4-6"
 api_key: "sk-ant-xxxx"
+# Key gak harus plaintext di disk — ref env var (ala opencode.json):
+# api_key: "{env:MULTACD_KEY}"     # var tak ter-set → dianggap kosong
 
 # Contoh provider lain (uncomment salah satu):
 #
@@ -524,9 +527,35 @@ def _setup_message(path: Path) -> str:
     )
 
 
+_ENV_REF = re.compile(r"\{env:([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
+def expand_env(value: object) -> object:
+    """Ganti `{env:NAMA}` → nilai environment variable (parity P1 opencode).
+
+    Rekursif ke dict/list. Var tak ter-set → string kosong (validasi
+    existing yang narik pesan error, bukan fungsi ini). Contoh:
+        api_key: "{env:MULTACD_KEY}"          # penuh = satu ref
+        base_url: "https://{env:HOST}/v1"     # campuran juga boleh
+    """
+    if isinstance(value, dict):
+        return {k: expand_env(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [expand_env(v) for v in value]
+    if isinstance(value, str) and "{env:" in value:
+        return _ENV_REF.sub(
+            lambda m: os.environ.get(m.group(1), ""), value)
+    return value
+
+
 def config_from_dict(raw: dict) -> Config:
-    """Dict (YAML/wizard) → Config. Key asing diabaikan (forward-compat)."""
+    """Dict (YAML/wizard) → Config. Key asing diabaikan (forward-compat).
+
+    P1: `{env:VAR}` di string mana pun diekspansi dulu — key API gak perlu
+    plaintext di disk (ref: pola opencode.json).
+    """
     known = {f.name for f in fields(Config)}
+    raw = expand_env(raw)
     return Config(**{k: v for k, v in raw.items() if k in known})
 
 
@@ -659,6 +688,13 @@ if __name__ == "__main__":
         schedules=[{"name": "j", "cron": "0 7 * * *",
                      "action": "briefing"}])
     assert full.telegram.admin_id == 1 and full.schedules[0].cron == "0 7 * * *"
+
+    # P1: `{env:VAR}` → nilai environment (parity opencode; rekursif nested).
+    os.environ["MULTACD_TEST_KEY"] = "rahasia-123"
+    e1 = config_from_dict({"model": "m", "api_key": "{env:MULTACD_TEST_KEY}",
+                           "telegram": {"bot_token": "a{env:NOPE_BODO}b"}})
+    assert e1.api_key == "rahasia-123", e1.api_key
+    assert e1.telegram.bot_token == "ab"  # var tak ada → string kosong
 
     # Invalid: satu ConfigError berisi SEMUA field bermasalah.
     try:
