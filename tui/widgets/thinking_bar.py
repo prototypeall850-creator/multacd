@@ -83,6 +83,7 @@ class ThinkingBar(Static):
         super().__init__("", id="thinking-bar")
         self._base = ""
         self._dots = 1
+        self.display = False  # TUI-R7: idle = baris kosong tidak disisakan
 
     def on_mount(self) -> None:
         self.set_interval(INTERVAL, self._tick)
@@ -125,6 +126,9 @@ class ThinkingBar(Static):
     def _paint(self) -> None:
         # Plain text (nama tool plugin bisa berisi apa saja) → Text.
         with suppress(Exception):  # belum mount saat show() dari test
+            # TUI-R7: bar hidden saat idle — jangan sisakan baris kosong;
+            # chat dapat ruang penuh kecuali agent sedang kerja.
+            self.display = bool(self._base)
             self.update(Text(dotted(self._base, self._dots)))
 
 

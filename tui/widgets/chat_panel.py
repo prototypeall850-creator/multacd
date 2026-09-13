@@ -56,9 +56,10 @@ class ChatPanel(VerticalScroll):
         color: $text;
         padding: 2 0 1 0;
     }
-    ChatPanel .splash-hints {
-        text-align: right;
+    ChatPanel .splash-body {
+        text-align: center;
         color: $text-muted;
+        margin-bottom: 1;
     }
     ChatPanel .splash-ver {
         text-align: right;
@@ -102,19 +103,14 @@ class ChatPanel(VerticalScroll):
         body.append("\n")
         body.append(mode, style="blue")
         body.append(f"  ·  {short}  ·  {prov}", style="dim")
-        hints = Text()
-        hints.append("/ ", style="")
-        hints.append("commands  ", style="dim")
-        hints.append("ctrl+o ", style="")
-        hints.append("models", style="dim")
         tip = Text()
         tip.append(f"{_icons.icon('bullet')}  Tip  ", style="#fab387")  # peach §10
         tip.append(self.pick_tip(), style="dim")
         ver = Text(f"v{version}", style="dim")
+        # TUI-R7: tanpa Panel border (§34) + tanpa hints (duplikat footer).
         widgets = [
             Static(logo, classes="splash-logo"),
-            Static(Panel(body, border_style="blue", padding=(1, 2))),
-            Static(hints, classes="splash-hints"),
+            Static(body, classes="splash-body"),
             Static(tip),
             Static(ver, classes="splash-ver"),
         ]

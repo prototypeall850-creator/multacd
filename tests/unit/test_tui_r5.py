@@ -33,3 +33,16 @@ def test_no_limit_no_percent_no_fake():
                          "cost": "—", "messages": 0, "tools": 0,
                          "model": "m", "status": "idle"})
     assert "%" not in s and "Limit" not in s
+
+
+def test_r7_recompose_dedup():
+    """TUI-R7: project/mode/status canonical di top bar — bukan di sidebar."""
+    s = render_snapshot({"mode": "code", "project": "p", "git": "g",
+                         "tokens": "10", "prompt": "—", "completion": "—",
+                         "cost": "—", "messages": 2, "tools": 1,
+                         "model": "glm-4.7", "status": "thinking"})
+    first = s.split("\n")[0]
+    assert first.startswith("Session:")  # tanpa baris project
+    assert "──" not in s  # tanpa separator dekoratif
+    assert "Agent: glm-4.7" in s
+    assert "thinking" not in s and "code ·" not in s  # dedup mode+status

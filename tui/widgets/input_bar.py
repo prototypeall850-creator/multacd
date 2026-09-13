@@ -26,7 +26,8 @@ class InputBar(TextArea):
     def __init__(self) -> None:
         super().__init__("", id="input-bar", language=None)
         self.show_line_numbers = False
-        self.border_title = "Enter kirim · /help · Ctrl+O model · Ctrl+I info"
+        # TUI-R7: tanpa border_title — hints permanen = dinding shortcut
+        # (§17: shortcut utama cukup di footer).
 
     async def on_key(self, event: events.Key) -> None:
         # Permission bar menunggu → SEMUA tombol jawab jadi miliknya,
