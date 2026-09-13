@@ -43,7 +43,7 @@ from tui.widgets.sources_panel import (
     SourcePreviewRequested,
     SourcesPanel,
 )
-from tui.widgets.status_bar import StatusBar
+from tui.widgets.status_bar import StatusBar, agent_status_for
 from tui.widgets.thinking_bar import ThinkingBar
 
 
@@ -422,6 +422,14 @@ class MainScreen(Screen):
             return
         try:
             tokens_s, cost_s = self._usage_strings()
+            # Split in/out resmi kalau provider melapor; kalau tidak → —
+            # (estimasi heuristik cuma tahu total, jangan sok split).
+            real = self.session.prompt_tokens + self.session.completion_tokens
+            if real:
+                prompt_s = f"{self.session.prompt_tokens:,}".replace(",", ".")
+                comp_s = f"{self.session.completion_tokens:,}".replace(",", ".")
+            else:
+                prompt_s = comp_s = "—"
             git = self.app.git_summary
             git_s = "—"
             if git.get("is_repo"):
@@ -433,10 +441,13 @@ class MainScreen(Screen):
                 "project": self.app.project_label,
                 "git": git_s,
                 "tokens": tokens_s,
+                "prompt": prompt_s,
+                "completion": comp_s,
                 "cost": cost_s,
                 "messages": len(self.app.context),
                 "tools": self.session.tool_count,
                 "model": self.app.cfg.model,
+                "status": agent_status_for(self.session.status),
             }
             if data["mode"] == "research":
                 try:
