@@ -622,6 +622,36 @@ class MainScreen(Screen):
         """Ctrl+Y: salin jawaban terakhir."""
         self.copy_assistant(1)
 
+    async def on_text_selected(self, event: events.TextSelected) -> None:
+        """Mouse selection selesai → auto copy (TUI-R8 §25).
+
+        Textual hanya kirim event ini saat MouseUp (bukan tiap MouseMove)
+        dan TIDAK untuk Input/TextArea (input aman). Empty → no-op.
+        """
+        try:
+            text = self.get_selected_text()
+        except Exception:
+            return
+        if not text:
+            return
+        # OSC52: clipboard via escape sequence terminal (jalan di SSH/
+        # headless tanpa tool OS), nol subprocess, tak pernah raise.
+        with suppress(Exception):
+            self.app.copy_to_clipboard(text)
+        self.run_worker(self._selection_copy(text))
+
+    async def _selection_copy(self, text: str) -> None:
+        """Clipboard OS + toast non-modal (§27). Tanpa rebuild chat."""
+        from core.clipboard import copy_text
+        try:
+            msg = await asyncio.to_thread(copy_text, text)
+        except Exception as e:
+            msg = f"gagal salin ({e})."
+        with suppress(Exception):
+            # app.notify = toast non-modal (§27): auto-dismiss, tanpa focus,
+            # tanpa geser layout. (Screen.notify = post_message, bukan toast!)
+            self.app.notify(msg, timeout=2)
+
     def copy_assistant(self, n: int = 1) -> None:
         """Salin jawaban assistant ke-n ke clipboard + lapor di chat."""
         try:
