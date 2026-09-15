@@ -87,7 +87,9 @@ class ProjectTree(DirectoryTree):
     async def on_key(self, event: events.Key) -> None:
         # Permission menunggu → tombol jawab didahulukan (Tree menelan
         # keystrokes buat quick-search, jadi screen fallback tak sampai).
-        if event.key.lower() in ("y", "n", "a", "e", "b", "enter", "escape"):
+        # m-E: "escape" TIDAK di sini — semua Esc satu pintu screen
+        # _on_escape (rantai prioritas palette→permission→selector→worker).
+        if event.key.lower() in ("y", "n", "a", "e", "b", "enter"):
             try:
                 from tui.widgets.permission_popup import PermissionPopup
                 perm = self.screen.query_one(PermissionPopup)

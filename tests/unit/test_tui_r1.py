@@ -85,7 +85,8 @@ def test_widgets_no_crash_unmounted():
     assert bar._status == "thinking"
 
     foot = FooterBar.__new__(FooterBar)
-    foot._workdir, foot._usage, foot._compact = "?", "—", False
+    foot._workdir, foot._usage = "?", "—"
+    foot._compact, foot._busy = False, False  # state instance eksplisit (m2)
     FooterBar.set_data(foot, "~/p", "1 · —")
     FooterBar.set_compact(foot, True)
     assert foot._compact is True

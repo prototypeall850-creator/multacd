@@ -18,6 +18,8 @@ Telegram diangkat permanen sesuai arahan user.
   diabaikan).
 - Parity opencode sekaligus masuk: P1 `{env:VAR}` di config (#57),
   P4 slash palette inline dua kolom ala opencode (#58), plus
+  P2 Esc interrupt — batalkan turn kapan pun, cleanup rapi,
+  context tetap valid untuk turn berikutnya (#56), plus
   TUI-R13 look (R13: fresh screen, logo half-block, meta rata kiri).
 
 Install: `pip install "multacd==2.0.0b10"`.

@@ -14,6 +14,7 @@ from textual.widgets import Static
 
 FULL_HINTS = "ctrl+p commands · ctrl+i panel"
 SHORT_HINTS = "ctrl+p · ctrl+i"
+BUSY_HINT = "esc batalkan"  # P2 (issue #56): jujur saat turn jalan
 
 
 def short_workdir(path: str, max_cols: int = 32) -> str:
@@ -36,9 +37,14 @@ def short_workdir(path: str, max_cols: int = 32) -> str:
     return s
 
 
-def render_footer(workdir: str, usage: str, compact: bool = False) -> str:
-    """Satu baris footer. Pure function."""
-    hints = SHORT_HINTS if compact else FULL_HINTS
+def render_footer(workdir: str, usage: str, compact: bool = False,
+                  busy: bool = False) -> str:
+    """Satu baris footer. Pure function.
+
+    P2 (issue #56): busy → hints diganti 'esc batalkan' (paling pendek,
+    aman di layar sempit; hint binding lain tak relevan saat agent jalan).
+    """
+    hints = BUSY_HINT if busy else (SHORT_HINTS if compact else FULL_HINTS)
     use = (usage or "").strip() or "—"
     return f"{workdir}  {use}  {hints}"
 
@@ -51,11 +57,18 @@ class FooterBar(Static):
         self._workdir = "?"
         self._usage = "—"
         self._compact = False
+        self._busy = False  # m2: state instance eksplisit, bukan class attr
 
     def set_data(self, workdir: str, usage: str) -> None:
         self._workdir = workdir or "?"
         self._usage = usage or "—"
         self._paint()
+
+    def set_busy(self, busy: bool) -> None:
+        """P2 (issue #56): turn jalan → hint 'esc batalkan'."""
+        if busy != self._busy:
+            self._busy = busy
+            self._paint()
 
     def set_compact(self, compact: bool) -> None:
         if compact != self._compact:
@@ -63,7 +76,8 @@ class FooterBar(Static):
             self._paint()
 
     def _paint(self) -> None:
-        text = render_footer(self._workdir, self._usage, self._compact)
+        text = render_footer(self._workdir, self._usage, self._compact,
+                             self._busy)
         with suppress(Exception):  # belum mount saat dipanggil dari test
             self.update(Text(text, style="dim"))
 
@@ -79,8 +93,13 @@ if __name__ == "__main__":
     assert "ctrl+i panel" in full and "~/p" in full
     short = render_footer("~/p", "12.450 · —", True)
     assert "ctrl+i panel" not in short and "ctrl+i" in short
+    # P2 (issue #56): busy → hint esc, binding lain digantikan.
+    busy = render_footer("~/p", "1 · —", False, True)
+    assert "esc batalkan" in busy and "ctrl+" not in busy
+    busy_c = render_footer("~/p", "1 · —", True, True)
+    assert busy_c == busy  # compact-safe: sama pendek di layar sempit
     bar = FooterBar.__new__(FooterBar)
-    bar._workdir, bar._usage, bar._compact = "?", "—", False
+    bar._workdir, bar._usage, bar._compact, bar._busy = "?", "—", False, False
     FooterBar.set_data(bar, "~/p", "1 · —")
     assert bar._workdir == "~/p"
     print("✅ footer_bar self-test OK")

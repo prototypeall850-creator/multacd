@@ -263,6 +263,11 @@ class PermissionPopup(Vertical):
             on_button = False
         if event.key == "enter" and on_button:
             return
+        if event.key == "escape":
+            # MINOR-2 (audit final): Esc satu pintu di MainScreen
+            # ._on_escape — kalau popup handle sendiri, palette terbuka
+            # kalah prioritas (popup langsung jawab "no").
+            return
         if self.answer_key(event.key):
             event.prevent_default()
             event.stop()

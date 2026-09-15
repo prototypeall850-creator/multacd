@@ -33,12 +33,22 @@ class InputBar(TextArea):
     async def on_key(self, event: events.Key) -> None:
         # Permission bar menunggu → SEMUA tombol jawab jadi miliknya,
         # apapun yang fokus (TextArea menelan keystrokes miliknya sendiri).
+        # M7: Esc TIDAK di sini — satu pintu lewat rantai screen di bawah
+        # (dulu permission dijawab duluan, palette/selector kelewatan —
+        # urutan beda dengan _on_escape).
         perm = self._waiting_perm()
         if perm is not None and event.key.lower() in (
-                "y", "n", "a", "e", "b", "enter", "escape"):
+                "y", "n", "a", "e", "b", "enter"):
             event.prevent_default()
             event.stop()
             perm.answer_key(event.key)
+            return
+        # M7: Esc satu sumber kebenaran — rantai prioritas _on_escape
+        # (palette → permission → selector → cancel → no-op).
+        # False (selector terbuka/idle) → lanjut ke cabang di bawah.
+        if event.key == "escape" and self.screen._on_escape():
+            event.prevent_default()
+            event.stop()
             return
         pal = self._open_palette()
         sel = self._open_selector()

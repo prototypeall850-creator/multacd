@@ -151,8 +151,10 @@ class SourcesPanel(Vertical):
                 SourcePreviewRequested(self._items[idx]["url"]))
 
     async def on_key(self, event: events.Key) -> None:
-        # Permission menunggu → Y/N/A/Esc jawab dulu (Enter tetap preview).
-        if event.key.lower() in ("y", "n", "a", "e", "b", "escape"):
+        # Permission menunggu → Y/N/A/E/B jawab dulu (Enter tetap preview).
+        # m-E: "escape" TIDAK di sini — semua Esc satu pintu screen
+        # _on_escape (rantai prioritas palette→permission→selector→worker).
+        if event.key.lower() in ("y", "n", "a", "e", "b"):
             try:
                 from tui.widgets.permission_popup import PermissionPopup
                 perm = self.screen.query_one(PermissionPopup)

@@ -89,14 +89,22 @@ def truncate_detail(detail: str) -> str:
     return text
 
 
-def head_markup(name: str, target: str, done: bool, success: bool) -> str:
+def head_markup(name: str, target: str, done: bool, success: bool,
+                cancelled: bool = False) -> str:
     """Header 1 baris (markup). Pure function — gampang dites.
 
     Nama/target di-escape: path/command user bisa berisi `[...]` yang
     bikin Textual MarkupError kalau mentah (issue #29).
+    P2 (issue #56): cancelled → glyph ■ redup (turn di-Esc saat tool jalan).
+    m-C (ronde-2 audit): warna cancelled = token `warning` kuning
+    (DESIGN.md:134), bukan [red] — `$warning` resolve dari theme aktif
+    saat render (pattern tokens: single source, sama kayak $var CSS).
     """
     mark = icons.icon("expand")
     name, target = escape(name), escape(target)
+    if cancelled:
+        status = f" [$warning]{state_glyph('cancelled')}[/]"
+        return (f"[dim]{name}[/]  [dim]{target}[/]{status}  {mark}")
     if not done:
         status = f" [blue]{icons.icon('pending')}[/]"
         return (f"[blue]{state_glyph('running')} {name}[/]"
@@ -148,6 +156,7 @@ class ToolActivity(Vertical):
         self._collapsed = True
         self._done = False
         self._success = False
+        self._cancelled = False  # P2 (issue #56): Esc saat tool masih jalan
         self._summary = ""
         self._detail = ""
         self._head = Static("", id=f"tool-head-{call_id}")
@@ -166,6 +175,12 @@ class ToolActivity(Vertical):
         self._done = True
         self._success = success
         self._summary, self._detail = summarize(result)
+        self._paint()
+
+    def set_cancelled(self) -> None:
+        """P2 (issue #56): tandai row masih running jadi cancelled (Esc)."""
+        self._cancelled = True
+        self._done = True  # M6: bukan running lagi — head ikut state cancelled
         self._paint()
 
     def toggle(self) -> None:
@@ -191,15 +206,23 @@ class ToolActivity(Vertical):
         if self._collapsed:
             try:
                 self._head.update(head_markup(
-                    self._name, self._target, self._done, self._success))
+                    self._name, self._target, self._done, self._success,
+                    self._cancelled))
                 self._body.display = False
             except Exception:
                 pass
         else:
             try:
-                self._head.update(
-                    f"{icons.icon('collapse')} {escape(self._name)}  "
-                    f"{escape(self._target)}")
+                if self._cancelled:
+                    # M6: row expanded saat di-cancel — head tetap bawa
+                    # glyph cancelled (dulu penanda hilang saat expand).
+                    self._head.update(head_markup(
+                        self._name, self._target, self._done, self._success,
+                        self._cancelled))
+                else:
+                    self._head.update(
+                        f"{icons.icon('collapse')} {escape(self._name)}  "
+                        f"{escape(self._target)}")
                 self._body.update(body_text(self._summary, self._detail,
                                             self._command))
                 self._body.display = True
@@ -232,6 +255,17 @@ if __name__ == "__main__":
     for _done, _ok in ((False, False), (True, True), (True, False)):
         _Content.from_markup(head_markup("bash", nasty, _done, _ok))
     _Content.from_markup(head_markup(nasty, nasty, True, True))
+    # P2 (issue #56): cancelled punya markup valid + glyph ■.
+    c = head_markup("bash", nasty, False, False, cancelled=True)
+    assert state_glyph("cancelled") in c and "bash" in c
+    _Content.from_markup(c)
+    # M6 (issue #56): row EXPANDED saat di-cancel — head tetap bawa glyph
+    # (dulu cabang expanded tak baca _cancelled → penanda hilang).
+    ta = ToolActivity("cx", "bash", {"command": "x"})
+    ta.set_cancelled()
+    assert ta._done is True  # bukan running lagi
+    ta.toggle()  # expand → _paint cabang expanded
+    assert state_glyph("cancelled") in str(ta._head.render()), ta._head.render()
     assert isinstance(body_text('[x=y="a", b]', "d"), Text)
     # TUI-R9 §15: shell → `$ command` dulu, baru output.
     b = body_text("3 passed", "", command="pytest -q")
