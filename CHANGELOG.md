@@ -2,7 +2,7 @@
 
 Format: Keep a Changelog. Versi: Semantic Versioning.
 
-## [2.0.0b10] - 2026-09-15
+## [2.0.0b10] - 2026-09-16
 
 Beta v2 kesepuluh — BREAKING: mode `/personal` dan seluruh stack
 Telegram diangkat permanen sesuai arahan user.
