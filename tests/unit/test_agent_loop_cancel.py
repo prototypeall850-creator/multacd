@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import os
 import threading
+import time
 
 import pytest
 
@@ -53,9 +54,13 @@ def _tool_msgs(ctx: ConversationContext) -> list[dict]:
 async def _run_until_tool(gen_task: asyncio.Task, seen: list,
                           call_id: str) -> None:
     """Tunggu sampai AgentToolStart call_id ter-consume, lalu margin kecil
-    biar cancel benar-benar mendarat di to_thread (bukan di yield)."""
-    for _ in range(500):
-        await asyncio.sleep(0)
+    biar cancel benar-benar mendarat di to_thread (bukan di yield).
+
+    Polling berbasis waktu dinding (deadline ~10 s): executor to_thread
+    cold-start di CI Windows berat bisa jauh > 500 iterasi sleep(0)."""
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline:
+        await asyncio.sleep(0.02)
         if any(getattr(e, "call_id", "") == call_id and
                type(e).__name__ == "AgentToolStart" for e in seen):
             break
