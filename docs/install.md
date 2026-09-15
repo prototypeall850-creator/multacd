@@ -33,11 +33,10 @@ irm https://raw.githubusercontent.com/prototypeall850-creator/multacd/main/scrip
 ## Via pip (semua OS)
 
 ```bash
-pip install "git+https://github.com/prototypeall850-creator/multacd"
+pip install multacd            # stable v1 (1.0.0)
+pip install "multacd==2.0.0b10"  # kanal beta v2 (pin — v2 masih prerelease)
 multacd --version
 ```
-
-Setelah v1.0.0 terbit di PyPI: `pip install multacd`.
 
 ## Dari source (buat ngoprek)
 
