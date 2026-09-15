@@ -18,17 +18,13 @@ a = Analysis(
         ("plugins/README.md", "plugins"),
     ],
     hiddenimports=[
-        # Package kita yang diimport lazy (agent_loop, daemon, bot).
+        # Package kita yang diimport lazy (agent_loop, plugin loader).
         "tools.registry",
         "core.agent_loop",
         "core.plugin_loader",
         "core.updater",
         "core.providers.openai_compat",
         "core.providers.anthropic",
-        "scheduler.engine",
-        "tg.bot",
-        "tg.agent",
-        "daemon.process",
     ],
     hookspath=[],
     hooksconfig={},

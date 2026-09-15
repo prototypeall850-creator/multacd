@@ -16,7 +16,7 @@ def test_all_commands_grouped_once():
 
     grouped = [c for _, cmds in COMMAND_GROUPS for c in cmds]
     assert sorted(grouped) == sorted(c for c, _ in PALETTE_COMMANDS)
-    assert len(set(grouped)) == len(grouped) == 12
+    assert len(set(grouped)) == len(grouped) == 11
 
 
 def test_grouped_structure_and_ranking():

@@ -88,29 +88,6 @@ research_deep_queries_per_round: 4  # query per round di deep research
 research_deep_max_sources: 20   # max total sumber deep research
 research_scrape_timeout: 15     # timeout scraping per URL (detik)
 research_snippet_fallback: true # pakai snippet kalau scraping gagal
-
-# ── Telegram Bot (Phase 4, opsional) ───────────────────
-# Diisi via setup wizard atau manual. Kosong = bot nonaktif.
-# telegram:
-#   bot_token: "123456:AAF..."  # dari @BotFather
-#   admin_id: 123456789         # Telegram user ID kamu
-#   admin_username: "usernamekamu"
-#   allowed_users: [987654321]
-
-# ── Scheduler (Phase 4, opsional) ──────────────────────
-# schedules:
-#   - name: "daily_briefing"
-#     cron: "0 7 * * *"
-#     action: "briefing"
-#     channel: "telegram"
-
-# ── Daily Briefing (Phase 4, opsional) ─────────────────
-# briefing:
-#   todo: true
-#   git_status: true
-#   news: true
-#   news_topics: ["artificial intelligence"]
-#   news_sources: 3
 """
 
 
@@ -127,7 +104,6 @@ THEMES = ("dark", "light", "multacd-dark", "multacd-light", "multacd-min",
           "catppuccin-macchiato")
 ICON_STYLES = ("auto", "nerdfonts", "unicode", "ascii")
 SEARCH_PROVIDERS = ("tavily", "exa", "brave", "serpapi", "duckduckgo")
-SCHEDULE_ACTIONS = ("briefing", "research")
 
 
 def _str(loc: str, v: object, errs: list[str], min_len: int = 0) -> str:
@@ -235,105 +211,6 @@ def _raise_if_errors(errs: list[str]) -> None:
 
 
 @dataclass
-class TelegramConfig:
-    """Kredensial bot + whitelist (Phase 4). Default kosong = nonaktif."""
-
-    bot_token: str = ""
-    admin_id: int = 0
-    admin_username: str = ""
-    allowed_users: list[int] = field(default_factory=list)
-
-    def __post_init__(self) -> None:
-        # Normalisasi None sudah ditangani _str/_int (key kosong → default).
-        errs: list[str] = []
-        self.bot_token = _str("telegram.bot_token", self.bot_token, errs)
-        self.admin_id = _int("telegram.admin_id", self.admin_id, errs)
-        self.admin_username = _str("telegram.admin_username",
-                                   self.admin_username, errs)
-        if self.allowed_users is None:
-            self.allowed_users = []  # `allowed_users:` kosong = []
-        if not isinstance(self.allowed_users, list):
-            errs.append(f"telegram.allowed_users: harus list, "
-                        f"dapat {self.allowed_users!r}")
-            self.allowed_users = []
-        else:
-            fixed = []
-            for i, uid in enumerate(self.allowed_users):
-                fixed.append(_int(f"telegram.allowed_users[{i}]", uid, errs))
-            self.allowed_users = fixed
-        _raise_if_errors(errs)
-
-
-@dataclass
-class ScheduleConfig:
-    """Satu jadwal cron (Phase 4). channel: telegram (saat ini satu-satunya)."""
-
-    name: str = ""
-    cron: str = ""
-    action: str = "briefing"
-    topic: str = ""
-    channel: str = "telegram"
-
-    def __post_init__(self) -> None:
-        errs: list[str] = []
-        self.name = _str("schedule.name", self.name, errs, min_len=1)
-        self.cron = _str("schedule.cron", self.cron, errs, min_len=1)
-        self.action = _choice("schedule.action", self.action, errs,
-                              SCHEDULE_ACTIONS)
-        self.topic = _str("schedule.topic", self.topic, errs)
-        self.channel = _str("schedule.channel", self.channel, errs)
-        _raise_if_errors(errs)
-
-
-@dataclass
-class BriefingConfig:
-    """Konten daily briefing (Phase 4)."""
-
-    todo: bool = True
-    news: bool = True
-    git_status: bool = True
-    weather: bool = False  # Phase 5 (butuh API cuaca)
-    news_topics: list[str] = field(
-        default_factory=lambda: ["artificial intelligence",
-                                 "software engineering"])
-    news_sources: int = 3
-
-    def __post_init__(self) -> None:
-        errs: list[str] = []
-        self.todo = _bool("briefing.todo", self.todo, errs)
-        self.news = _bool("briefing.news", self.news, errs)
-        self.git_status = _bool("briefing.git_status", self.git_status, errs)
-        self.weather = _bool("briefing.weather", self.weather, errs)
-        if self.news_topics is None:
-            self.news_topics = ["artificial intelligence",
-                                "software engineering"]
-        if not isinstance(self.news_topics, list) or not all(
-                isinstance(t, str) for t in self.news_topics):
-            errs.append("briefing.news_topics: harus list of string")
-            self.news_topics = []
-        self.news_sources = _int("briefing.news_sources", self.news_sources,
-                                 errs, gt=0)
-        _raise_if_errors(errs)
-
-
-def _nested(loc: str, cls: type, v: object, errs: list[str]) -> object:
-    """Dict → dataclass nested. Error nested digabung ke errs caller."""
-    if isinstance(v, cls):
-        return v
-    if v is None:
-        return cls()  # `telegram:` kosong tanpa isi = pakai default (nonaktif)
-    if isinstance(v, dict):
-        known = {f.name for f in fields(cls)}
-        try:
-            return cls(**{k: val for k, val in v.items() if k in known})
-        except ConfigError as e:
-            errs.extend(e.field_errors)
-            return cls()
-    errs.append(f"{loc}: harus mapping, dapat {type(v).__name__}")
-    return cls()
-
-
-@dataclass
 class Config:
     """Config utama multacd. Field flat 1:1 dengan contoh config.yaml."""
 
@@ -376,11 +253,6 @@ class Config:
     research_deep_max_sources: int = 20
     research_scrape_timeout: int = 15
     research_snippet_fallback: bool = True
-
-    # ── Personal agent (Phase 4, opsional) ──
-    telegram: TelegramConfig = field(default_factory=TelegramConfig)  # type: ignore[assignment]
-    schedules: list = field(default_factory=list)
-    briefing: BriefingConfig = field(default_factory=BriefingConfig)  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         errs: list[str] = []
@@ -443,40 +315,6 @@ class Config:
         self.research_snippet_fallback = _bool("research_snippet_fallback",
                                                self.research_snippet_fallback,
                                                errs)
-        self.telegram = _nested("telegram", TelegramConfig,
-                                self.telegram, errs)
-        if self.schedules is None:
-            self.schedules = []  # `schedules:` kosong = []
-        if not isinstance(self.schedules, list):
-            errs.append(f"schedules: harus list, "
-                        f"dapat {type(self.schedules).__name__}")
-            self.schedules = []
-        else:
-            fixed = []
-            for i, item in enumerate(self.schedules):
-                if isinstance(item, ScheduleConfig):
-                    fixed.append(item)
-                elif isinstance(item, dict):
-                    known = {f.name for f in fields(ScheduleConfig)}
-                    try:
-                        fixed.append(ScheduleConfig(
-                            **{k: v for k, v in item.items()
-                               if k in known}))
-                    except ConfigError as e:
-                        # Item invalid dilaporkan; Config.__post_init__
-                        # raise di akhir (errs tak kosong), jadi item
-                        # ini memang tidak dipakai.
-                        errs.extend(
-                            f"schedules[{i}].{fe.split('.', 1)[1]}"
-                            if fe.startswith("schedule.") else
-                            f"schedules[{i}].{fe}"
-                            for fe in e.field_errors)
-                else:
-                    errs.append(f"schedules[{i}]: harus mapping, "
-                                f"dapat {type(item).__name__}")
-            self.schedules = fixed
-        self.briefing = _nested("briefing", BriefingConfig,
-                                self.briefing, errs)
         _raise_if_errors(errs)
 
 
@@ -657,10 +495,7 @@ if __name__ == "__main__":
     _cfg_path.write_text(
         "model: groq/llama-3.3-70b-versatile\napi_key: gsk-x\n"
         "search_provider: ' Tavily '\ntheme: Dark\n"
-        "telegram:\n  bot_token: t\n  admin_id: 1\n  admin_username: u\n"
-        "  allowed_users: [2]\n"
-        "schedules:\n  - name: j\n    cron: '0 7 * * *'\n"
-        "    action: briefing\n"
+        "provider_keys:\n  groq: gsk-nested\n"
         "kunci_asing: abaikan gue\n",
         encoding="utf-8")
     cfg = load_config(_cfg_path)
@@ -674,38 +509,24 @@ if __name__ == "__main__":
     # Normalisasi + nested parse dari YAML.
     assert cfg.search_provider == "tavily", cfg.search_provider
     assert cfg.theme == "dark", cfg.theme
-    assert cfg.telegram.admin_id == 1 and cfg.telegram.allowed_users == [2]
-    assert cfg.schedules[0].cron == "0 7 * * *"
-
-    # Phase 4: nested default + parse dari dict.
-    legacy = Config(model="m", api_key="k")  # yaml lama tanpa phase4
-    assert legacy.telegram.bot_token == "" and legacy.schedules == []
-    assert legacy.telegram.admin_id == 0 and legacy.briefing.todo
-    assert legacy.briefing.news_sources == 3
-    full = Config(model="m", api_key="k", telegram={
-        "bot_token": "t", "admin_id": 1, "admin_username": "u",
-        "allowed_users": [2]},
-        schedules=[{"name": "j", "cron": "0 7 * * *",
-                     "action": "briefing"}])
-    assert full.telegram.admin_id == 1 and full.schedules[0].cron == "0 7 * * *"
+    assert cfg.provider_keys["groq"] == "gsk-nested"
 
     # P1: `{env:VAR}` → nilai environment (parity opencode; rekursif nested).
     os.environ["MULTACD_TEST_KEY"] = "rahasia-123"
     e1 = config_from_dict({"model": "m", "api_key": "{env:MULTACD_TEST_KEY}",
-                           "telegram": {"bot_token": "a{env:NOPE_BODO}b"}})
+                           "provider_keys": {"groq": "a{env:NOPE_BODO}b"}})
     assert e1.api_key == "rahasia-123", e1.api_key
-    assert e1.telegram.bot_token == "ab"  # var tak ada → string kosong
+    assert e1.provider_keys["groq"] == "ab"  # var tak ada → string kosong
 
     # Invalid: satu ConfigError berisi SEMUA field bermasalah.
     try:
         Config(model="  ", api_key="k", search_provider="google",
                temperature=9, research_deep_rounds=99,
-               schedules=[{"name": "", "action": "party"}])
+               provider_keys=5)
         raise AssertionError("config invalid harus ditolak")
     except ConfigError as e:
         for needle in ("search_provider", "temperature",
-                       "research_deep_rounds", "schedules[0].name",
-                       "schedules[0].action"):
+                       "research_deep_rounds", "provider_keys"):
             assert needle in str(e), (needle, str(e)[:200])
 
     print("✅ Config loaded OK")

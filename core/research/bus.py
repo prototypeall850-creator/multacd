@@ -5,7 +5,7 @@ async (kadang di thread terpisah via _run_coro). Callback on_event harus
 sampai ke widget Textual yang hidup di app loop.
 
 Dulu global mutable (`_sink`) — satu turn nimpa turn lain kalau dua sesi
-jalan bareng (TUI + daemon/tg, test paralel). Sekarang ContextVar: tiap
+jalan bareng (mis. test paralel). Sekarang ContextVar: tiap
 task asyncio bawa sink sendiri-sendiri. Rantai propagasi dijaga dua titik:
 
 - `asyncio.to_thread(execute_tool)` (agent_loop) = copy context otomatis.
