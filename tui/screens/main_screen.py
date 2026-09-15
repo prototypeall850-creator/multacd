@@ -225,6 +225,11 @@ class MainScreen(Screen):
         # TUI-R10: task di-background via Ctrl+B (murni UI state —
         # worker agent TIDAK disentuh; streaming tetap masuk chat).
         self._bg_active = False
+        # P2 (issue #56): ref worker turn buat Esc-cancel + call_id tool
+        # yang sedang jalan (UI-side — state session sudah dibersihkan
+        # controller saat CancelledError sampai ke _run_turn).
+        self._turn_worker: Any = None
+        self._live_call: str | None = None
 
     @property
     def _turn_running(self) -> bool:
@@ -607,9 +612,17 @@ class MainScreen(Screen):
     async def on_key(self, event: events.Key) -> None:
         """Fallback permission: kalau bar menunggu dan tombol jawab ditekan
         di widget lain (tree/panel), teruskan. InputBar sudah handle duluan
-        untuk kasusnya sendiri (TextArea menelan keystrokes)."""
-        if event.key.lower() not in ("y", "n", "a", "e", "b", "enter",
-                                      "escape", "ctrl+f"):
+        untuk kasusnya sendiri (TextArea menelan keystrokes).
+
+        P2 (issue #56): Esc lewat rantai prioritas di _on_escape.
+        """
+        key = event.key.lower()
+        if key == "escape":
+            if self._on_escape():
+                event.prevent_default()
+                event.stop()
+            return
+        if key not in ("y", "n", "a", "e", "b", "enter", "ctrl+f"):
             return
         try:
             perm = self.query_one(PermissionPopup)
@@ -619,8 +632,65 @@ class MainScreen(Screen):
             event.prevent_default()
             event.stop()
 
+    def _on_escape(self) -> bool:
+        """Rantai Esc (P2, issue #56) — urutan WAJIB:
+
+        1. palette terbuka (inline/overlay) → tutup palette.
+        2. permission menunggu → Esc = jawab "no" (semantics lama).
+        3. selector model/provider terbuka → biarkan dia handle sendiri.
+        4. turn jalan → cancel worker (tool shell tak bisa dibunuh —
+           dia jalan di asyncio.to_thread; UI jujur soal ini).
+        5. selain itu → no-op (jangan keluar app).
+
+        Return True kalau Esc dikonsumsi. Dialog ter-push (Continue/
+        AskDialog) tak pernah sampai sini — screen di atasnya yang menerima.
+        """
+        with suppress(Exception):
+            pal = self.query_one(SlashPalette)
+            if pal.is_open:
+                pal.close()
+                with suppress(Exception):
+                    self.query_one(InputBar).focus()  # no-op saat busy
+                return True
+        perm: PermissionPopup | None = None
+        with suppress(Exception):
+            perm = self.query_one(PermissionPopup)
+        if perm is not None and perm.is_waiting:
+            perm.answer_key("escape")
+            return True
+        with suppress(Exception):
+            if (self.query_one(ModelSelector).is_open
+                    or self.query_one(ProviderSelector).is_open):
+                # Selector handle Esc sendiri HANYA saat fokus di InputBar
+                # (cabang on_key-nya); fokus di widget lain → screen tutup,
+                # jangan no-op (selector bisa nyangkut).
+                if self.query_one(InputBar).has_focus:
+                    return False
+                with suppress(Exception):
+                    sel = self.query_one(ModelSelector)
+                    if sel.is_open:
+                        sel.close()
+                    prov = self.query_one(ProviderSelector)
+                    if prov.is_open:
+                        prov.close()
+                return True
+        worker = self._turn_worker
+        # m-F: syarat `session.busy` terlalu ketat — jendela cleanup M3
+        # (busy sudah False, worker masih membongkar UI) kini tetap bisa
+        # di-Esc. `_turn_worker` HANYA diisi worker turn (_submit), bukan
+        # _connect_flow/_clear_ui → tak ada worker lain yang ter-cancel.
+        # M2 sudah tangani cancel kedua di tengah cleanup (raise tetap).
+        if worker is not None and not worker.is_finished:
+            worker.cancel()
+            return True
+        return False
+
     def _submit(self, text: str) -> None:
-        if self.session.busy:
+        # M3: guard worker juga — saat cleanup cancel (except block screen
+        # masih await), controller sudah end_turn (busy=False) tapi worker
+        # belum selesai; klik tree/palette/export menembus guard busy dan
+        # menimpa turn lama.
+        if self.session.busy or self._turn_worker is not None:
             if self._bg_active:
                 self._submit_while_background(text)
             return  # abaikan submit ganda saat agent berpikir
@@ -642,12 +712,25 @@ class MainScreen(Screen):
                     n = 1
             self.copy_assistant(n)
             return
+        # /clear: TUI-local (M4) — dulu lewat turn worker; Esc di tengah
+        # await chat.clear() nyisain chat setengah terhapus + state
+        # streaming tak reset. Context dibersihkan di sini (perilaku sama
+        # dengan agent_loop action "clear": system prompt diisi ulang),
+        # UI-nya lewat worker ringan.
+        if parts and parts[0].lower() == "/clear":
+            self.app.context.clear()
+            self.app.context.add_message("system",
+                                         self.app.composer.compose())
+            self.run_worker(self._clear_ui())
+            return
         # /connect [provider] → selector popup (tanpa arg) atau langsung
         # pasang key (dengan arg). TUI-local, tanpa LLM.
         if parts and parts[0].lower() == "/connect":
             if len(parts) < 2 or not parts[1].strip():
                 self.provider_open()
                 return
+            # ponytail: /connect pakai busy tanpa _turn_worker — guard M3
+            # tetap nutup (busy True), Esc tak relevan (bukan agent turn).
             self.session.begin_turn()
             self.run_worker(self._connect_flow(parts[1]))
             return
@@ -665,7 +748,8 @@ class MainScreen(Screen):
             self.model_open(provider=arg or None)
             return
         self._turn_running = True
-        self.run_worker(self._run_turn(text))
+        # P2 (issue #56): simpan ref — Esc membatalkan turn ini.
+        self._turn_worker = self.run_worker(self._run_turn(text))
 
     def _submit_while_background(self, text: str) -> None:
         """Submit saat task di-background (TUI-R10 §29: UI tetap usable).
@@ -836,6 +920,17 @@ class MainScreen(Screen):
         with suppress(Exception):
             await self.query_one(ChatPanel).add_info(text)
 
+    async def _clear_ui(self) -> None:
+        """M4: bersihkan UI chat utk /clear (context sudah bersih di _submit)."""
+        with suppress(Exception):
+            chat = self.query_one(ChatPanel)
+            await chat.clear()
+            await chat.add_info("History dibersihkan — mulai sesi baru.")
+            # m-A: context kosong = token usage berubah — refresh shell
+            # (footer) + sidebar (info panel) biar tidak basi permanen.
+            self._refresh_shell()
+            self._refresh_info()
+
     def action_toggle_tree(self) -> None:
         """Ctrl+T: tampil/sembunyi file tree (+ tandai file modified)."""
         tree = self.query_one(ProjectTree)
@@ -891,6 +986,10 @@ class MainScreen(Screen):
 
     def _queue_live(self, call_id: str, line: str) -> None:
         """Jalan di app loop: mount/update widget live (thread-safe di sini)."""
+        # M5: thread tool tak bisa dibunuh — baris telat setelah cancel/
+        # done jangan bikin blok live yatim utk call_id yang sudah di-drop.
+        if self._turn_worker is None or call_id != self._live_call:
+            return
         try:
             chat = self.query_one(ChatPanel)
         except Exception:
@@ -1015,25 +1114,31 @@ class MainScreen(Screen):
         return ctl
 
     async def _run_turn(self, text: str) -> None:
-        chat = self.query_one(ChatPanel)
-        bar = self.query_one(StatusBar)
-        inbar = self.query_one(InputBar)
-        think = self.query_one(ThinkingBar)
         # TUI-R2 §7: durasi + token turn ini buat meta jawaban (ukur di UI,
         # read-only dari SessionState — agent runtime tak disentuh).
         t0 = time.monotonic()
         tok0 = self.session.completion_tokens
+        cancelled = False  # P2 (issue #56): skip toast bg + tandai except
+        self._live_call = None  # reset stale antar turn
+        # m-F: query widget DI DALAM try — kalau raise di luar, finally
+        # tak pernah jalan → _turn_worker nyangkut non-None selamanya
+        # (semua submit ditolak, Esc juga mati).
+        chat: ChatPanel | None = None
+        bar: StatusBar | None = None
+        inbar: InputBar | None = None
+        think: ThinkingBar | None = None
         try:
+            chat = self.query_one(ChatPanel)
+            bar = self.query_one(StatusBar)
+            inbar = self.query_one(InputBar)
+            think = self.query_one(ThinkingBar)
             inbar.set_busy(True)
+            with suppress(Exception):  # footer hint 'esc batalkan'
+                self.query_one(FooterBar).set_busy(True)
             bar.render_state(self.session)
             think.render_state(self.session)
             # §10: turn pertama = splash bubar, masuk layout normal.
             await chat.dismiss_splash()
-            # /clear: bersihkan UI dulu biar command + respons tetap kelihatan.
-            # (Single source of truth parsing tetap ModeManager di agent_loop.)
-            stripped = text.strip().lower()
-            if stripped == "/clear" or stripped.startswith("/clear "):
-                await chat.clear()
             await chat.add_user(text)
             await chat.start_assistant()
 
@@ -1041,17 +1146,20 @@ class MainScreen(Screen):
                 if isinstance(event, AgentText):
                     await chat.append_assistant_text(event.delta)
                 elif isinstance(event, AgentToolStart):
+                    self._live_call = event.call_id  # P2: jejak buat cancel
                     if not self._bg_active:  # bg: label 'background' jangan
                         think.render_state(self.session)  # ditimpa
                     await chat.add_tool_row(event.call_id, event.name,
                                             event.params)
                 elif isinstance(event, AgentToolDone):
+                    self._live_call = None
                     if not self._bg_active:
                         think.render_state(self.session)
                     await chat.drop_live_output(event.call_id)
                     await chat.update_tool_row(event.call_id, event.name,
                                                event.success, event.result)
                 elif isinstance(event, AgentError):
+                    self._live_call = None
                     await chat.add_error(event.message)
                 # AgentDone: teks sudah ter-stream; AgentUsage/Continue:
                 # sudah dilipat ke session oleh controller.
@@ -1081,26 +1189,65 @@ class MainScreen(Screen):
                 text, hooks,
                 active_tools=self.app.mode_manager.get_active_tools(),
             )
+        except asyncio.CancelledError:
+            # P2 (issue #56): Esc membatalkan turn. Rapikan UI, lalu
+            # lempar lagi — Textual butuh CancelledError naik (no suppress).
+            # Session busy/idle sudah di-reset jalur finally controller.
+            cancelled = True
+            call = self._live_call
+            self._live_call = None
+            # M1 (issue #56): SELALU kasih umpan balik — cancel pure
+            # streaming jangan membungkam; kalimat tool-shell hanya
+            # kalau memang ada tool live.
+            # M2: cancel kedua bisa mendarat di await di blok ini —
+            # bungkam, cleanup pertama jangan dipotong (raise tetap jalan).
+            try:
+                await chat.add_info("Turn dibatalkan (Esc).")
+                if call is not None:
+                    with suppress(Exception):
+                        chat.mark_tool_cancelled(call)
+                        await chat.drop_live_output(call)
+                    await chat.add_info(
+                        "Tool shell yang sedang jalan mungkin tetap "
+                        "selesai di background.")
+            except BaseException:  # cancel kedua, bukan error
+                pass
+            raise
         finally:
+            # M2: state kritis di-reset SINKRON duluan (tanpa await) —
+            # cancel kedua bisa mendarat di await mana pun di bawah;
+            # kalau end_turn/set_busy di belakangnya, input mati permanen.
+            self._turn_worker = None
             dur = time.monotonic() - t0
             dtok = self.session.completion_tokens - tok0
             was_bg = self._bg_active  # reset SEBELUM render normal
             self._bg_active = False
+            self.session.end_turn()
             with suppress(Exception):
+                think.render_state(self.session)
+                bar.render_state(self.session)
+            with suppress(Exception):
+                self._sync_mode_ui()
+            # m-F: inbar bisa None (query gagal) — finally tak boleh raise.
+            # MINOR-4 (audit final): suppress per-statement — statement
+            # pertama raise jangan skip reset footer/fokus.
+            with suppress(Exception):
+                inbar.set_busy(False)
+            with suppress(Exception):
+                self.query_one(FooterBar).set_busy(False)
+            with suppress(Exception):
+                inbar.focus()
+            # Kosmetik belakangan: boleh ke-potong cancel kedua, jangan raise.
+            try:
                 meta = render_meta(self.app.mode_manager.get_mode(),
                                    self.app.cfg.model, dur, dtok)
                 await chat.close_assistant(meta)
-            self.session.end_turn()
-            think.render_state(self.session)
-            bar.render_state(self.session)
-            self._sync_mode_ui()
-            inbar.set_busy(False)
-            inbar.focus()
-            if was_bg:  # §30: user harus tahu task selesai
-                with suppress(Exception):
+                if was_bg and not cancelled:  # §30 + P2: cancel bukan "selesai"
                     await chat.add_info(
                         "✓ Background selesai — jawaban di atas.")
                     self.app.notify("Background selesai", timeout=3)
+            except BaseException:  # cleanup kosmetik saja
+                pass
 
     def _apply_research_event(self, ev: dict[str, Any]) -> None:
         """Terapkan satu event orchestrator ke SourcesPanel (jalan di app loop)."""

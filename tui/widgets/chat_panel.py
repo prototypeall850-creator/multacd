@@ -204,18 +204,35 @@ class ChatPanel(VerticalScroll):
 
         Dipanggil dari thread worker via call_from_thread + run_worker.
         Max LIVE_LINES terakhir; widget dibuang saat tool done.
+
+        m-D (ronde-2 audit): worker ini fire-and-forget — guard M5 di
+        _queue_live dievaluasi saat ENQUEUE; baris telat bisa mount
+        setelah cancel/done → cek ulang di sini: call tanpa row tool =
+        artefak, buang senyap (bukan blok live yatim).
+
+        MINOR-3 (audit final): row done/cancelled juga senyap — baris
+        telat pasca-AgentToolDone jangan hidupkan lagi blok live.
         """
+        row = self._tool_rows.get(call_id)
+        if row is None or row._done:
+            return
         entry = self._live.get(call_id)
-        if entry is None:
+        fresh = entry is None
+        if fresh:
             widget = Static("", classes="live-out")
-            await self.mount(widget)
             entry = (widget, [])
+            # MAJOR-2 (audit final): daftarkan SEBELUM await mana pun —
+            # dua baris burst sama-sama lihat None → dobel-mount, widget
+            # pertama yatim permanen + urutan baris tertukar.
             self._live[call_id] = entry
         widget, lines = entry
+        # Append+update tanpa await (atomik) — urutan baris burst terjaga.
         lines.append(line[-200:])  # baris super panjang dipotong
         del lines[:-self.LIVE_LINES]
         # Output tool mentah (bisa berisi `[...]`) → Text, bukan markup.
         widget.update(Text("\n".join(lines)))
+        if fresh:
+            await self.mount(widget)
         self.scroll_end(animate=False)
 
     async def add_diff_preview(self, workdir: str = ".") -> None:
@@ -253,6 +270,12 @@ class ChatPanel(VerticalScroll):
             return
         row.set_done(success, result)
 
+    def mark_tool_cancelled(self, call_id: str) -> None:
+        """P2 (issue #56): row tool masih running → cancelled (Esc)."""
+        row = self._tool_rows.get(call_id)
+        if row is not None:
+            row.set_cancelled()
+
     def assistant_history(self, n: int = 1) -> str:
         """Jawaban assistant ke-n dari belakang (1 = terakhir). '' = kosong."""
         if n < 1:
@@ -274,6 +297,10 @@ class ChatPanel(VerticalScroll):
         self._assistant_text = ""
         self._assistant_history.clear()
         self._tool_rows.clear()
+        # m-B: widget live sudah kebuang bareng children di atas — dict-nya
+        # wajib direset juga, kalau tidak add_live_output berikutnya update
+        # widget yatim yang sudah lepas dari DOM.
+        self._live.clear()
 
     def render_markdown_text(self, text: str) -> RichMarkdown:
         """Helper (dipakai test): pastikan teks valid buat Rich Markdown."""

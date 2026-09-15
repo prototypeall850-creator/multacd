@@ -263,95 +263,139 @@ async def run_agent(
         tool_rounds += 1
 
         # ── Act + Observe: proses tiap tool call ──
-        for call in done.tool_calls:
-            yield AgentToolStart(call.id, call.name, call.arguments)
-            recent_names.append(call.name)
+        # MAJOR-2 (ronde-2 audit): id yang sudah keisi = per-BATCH ini,
+        # bukan scan global. Provider lokal (ollama/vLLM) doyan reuse
+        # tool_call_id lintas turn — scan global bikin call ronde ini
+        # dikira sudah kejadi padahal belum → bolong lagi.
+        answered: set[str] = set()
 
-            # Tool "ask" dicegat: jawab via callback, bukan execute_tool (stdin).
-            if call.name == "ask":
-                question = call.arguments.get("question", "...")
-                answer = await ask_cb(str(question))
-                ask_result = {"success": True, "result": answer, "error": None}
-                context.add_tool_result(call.id, "ask", ask_result)
-                yield AgentToolDone(call.id, "ask", True, ask_result)
-                _track_outcome("ask", call.arguments, ask_result)
-                continue
+        def _answer(call_id: str, call_name: str,
+                    result: dict[str, Any]) -> None:
+            context.add_tool_result(call_id, call_name, result)
+            answered.add(call_id)
 
-            decision = checker.check(call.name, call.arguments)
-            if decision == "deny":
-                deny_result = fail(
-                    f"Tool `{call.name}` tidak tersedia. Pakai tool dari daftar yang ada.")
-                context.add_tool_result(call.id, call.name, deny_result)
-                yield AgentToolDone(call.id, call.name, False, deny_result)
-                if _track_outcome(call.name, call.arguments, deny_result):
-                    yield _stuck_error(call.name)
-                    return
-                continue
+        def _fill_unanswered(message: str) -> None:
+            # Idempoten via `answered` — dipanggil except + finally,
+            # hasil asli / fill pertama tak pernah ditimpa-duplikat.
+            for call in done.tool_calls:
+                if call.id not in answered:
+                    context.add_tool_result(call.id, call.name, fail(message))
+                    answered.add(call.id)
 
-            if decision == "ask":
-                choice = await confirm_cb(call.name, call.arguments)
-                if choice == "all":
-                    checker.approve_all_for_session(call.name)
-                    choice = "yes"
-                # #4: user edit pesan commit → pakai pesan baru, lanjut yes.
-                if choice.startswith("edit:"):
-                    new_msg = choice[len("edit:"):].strip()
-                    if not new_msg:
-                        choice = "no"  # edit dibatalkan = tolak
-                    elif "message" in call.arguments:
-                        call.arguments["message"] = new_msg
-                        choice = "yes"
-                    else:
-                        choice = "yes"
-                # #4: user pilih buat branch baru (push protected) → buat
-                # branch, arahkan push ke sana, lanjut yes.
-                if choice == "branch":
-                    new_branch = (await ask_cb(
-                        "Nama branch baru buat push (kosongkan = batal)?"
-                    ) or "").strip()
-                    if not new_branch:
-                        choice = "no"
-                    else:
-                        made = await asyncio.to_thread(
-                            execute_tool, "git_checkout",
-                            {"workdir": call.arguments.get("workdir", "."),
-                             "branch": new_branch, "create": True})
-                        if not made.get("success"):
-                            context.add_tool_result(call.id, call.name, made)
-                            yield AgentToolDone(call.id, call.name, False, made)
-                            if _track_outcome(call.name, call.arguments, made):
-                                yield _stuck_error(call.name)
-                                return
-                            continue
-                        call.arguments["branch"] = new_branch
-                        call.arguments.pop("allow_protected", None)
-                        choice = "yes"
-                if choice != "yes":
-                    cancel_result = fail(
-                        f"Dibatalkan user — jangan coba {call.name} yang sama lagi, "
-                        "cari cara lain atau tanya user.")
-                    context.add_tool_result(call.id, call.name, cancel_result)
-                    yield AgentToolDone(call.id, call.name, False, cancel_result)
-                    if _track_outcome(call.name, call.arguments, cancel_result):
+        try:
+            for call in done.tool_calls:
+                yield AgentToolStart(call.id, call.name, call.arguments)
+                recent_names.append(call.name)
+
+                # Tool "ask" dicegat: jawab via callback, bukan execute_tool (stdin).
+                if call.name == "ask":
+                    question = call.arguments.get("question", "...")
+                    answer = await ask_cb(str(question))
+                    ask_result = {"success": True, "result": answer, "error": None}
+                    _answer(call.id, "ask", ask_result)
+                    yield AgentToolDone(call.id, "ask", True, ask_result)
+                    _track_outcome("ask", call.arguments, ask_result)
+                    continue
+
+                decision = checker.check(call.name, call.arguments)
+                if decision == "deny":
+                    deny_result = fail(
+                        f"Tool `{call.name}` tidak tersedia. Pakai tool dari daftar yang ada.")
+                    _answer(call.id, call.name, deny_result)
+                    yield AgentToolDone(call.id, call.name, False, deny_result)
+                    if _track_outcome(call.name, call.arguments, deny_result):
                         yield _stuck_error(call.name)
                         return
                     continue
 
-            # to_thread: tool sync jalan di thread, event loop tetap hidup.
-            # Tanpa ini, tool research (yang emit event via call_from_thread)
-            # deadlock — loop diblok nunggu thread, thread nunggu loop.
-            # output_cb (live stream) jalan dari thread itu juga.
-            def _live(line: str, _cid: str = call.id) -> None:
-                assert output_cb is not None
-                output_cb(_cid, line)
-            result = await asyncio.to_thread(
-                execute_tool, call.name, call.arguments,
-                _live if output_cb is not None else None)
-            context.add_tool_result(call.id, call.name, result)
-            yield AgentToolDone(call.id, call.name, result["success"], result)
-            if _track_outcome(call.name, call.arguments, result):
-                yield _stuck_error(call.name)
-                return
+                if decision == "ask":
+                    choice = await confirm_cb(call.name, call.arguments)
+                    if choice == "all":
+                        checker.approve_all_for_session(call.name)
+                        choice = "yes"
+                    # #4: user edit pesan commit → pakai pesan baru, lanjut yes.
+                    if choice.startswith("edit:"):
+                        new_msg = choice[len("edit:"):].strip()
+                        if not new_msg:
+                            choice = "no"  # edit dibatalkan = tolak
+                        elif "message" in call.arguments:
+                            call.arguments["message"] = new_msg
+                            choice = "yes"
+                        else:
+                            choice = "yes"
+                    # #4: user pilih buat branch baru (push protected) → buat
+                    # branch, arahkan push ke sana, lanjut yes.
+                    if choice == "branch":
+                        new_branch = (await ask_cb(
+                            "Nama branch baru buat push (kosongkan = batal)?"
+                        ) or "").strip()
+                        if not new_branch:
+                            choice = "no"
+                        else:
+                            made = await asyncio.to_thread(
+                                execute_tool, "git_checkout",
+                                {"workdir": call.arguments.get("workdir", "."),
+                                 "branch": new_branch, "create": True})
+                            if not made.get("success"):
+                                _answer(call.id, call.name, made)
+                                yield AgentToolDone(call.id, call.name, False, made)
+                                if _track_outcome(call.name, call.arguments, made):
+                                    yield _stuck_error(call.name)
+                                    return
+                                continue
+                            call.arguments["branch"] = new_branch
+                            call.arguments.pop("allow_protected", None)
+                            choice = "yes"
+                    if choice != "yes":
+                        cancel_result = fail(
+                            f"Dibatalkan user — jangan coba {call.name} yang sama lagi, "
+                            "cari cara lain atau tanya user.")
+                        _answer(call.id, call.name, cancel_result)
+                        yield AgentToolDone(call.id, call.name, False, cancel_result)
+                        if _track_outcome(call.name, call.arguments, cancel_result):
+                            yield _stuck_error(call.name)
+                            return
+                        continue
+
+                # to_thread: tool sync jalan di thread, event loop tetap hidup.
+                # Tanpa ini, tool research (yang emit event via call_from_thread)
+                # deadlock — loop diblok nunggu thread, thread nunggu loop.
+                # output_cb (live stream) jalan dari thread itu juga.
+                def _live(line: str, _cid: str = call.id) -> None:
+                    assert output_cb is not None
+                    output_cb(_cid, line)
+                result = await asyncio.to_thread(
+                    execute_tool, call.name, call.arguments,
+                    _live if output_cb is not None else None)
+                _answer(call.id, call.name, result)
+                yield AgentToolDone(call.id, call.name, result["success"], result)
+                if _track_outcome(call.name, call.arguments, result):
+                    yield _stuck_error(call.name)
+                    return
+        except (asyncio.CancelledError, GeneratorExit):
+            # MINOR-1 (audit final): cancel user (Esc) / aclose konsumen —
+            # pesan "Dibatalkan user" sah (SYSTEM_PROMPT: model hormati).
+            _fill_unanswered("Dibatalkan user — turn dihentikan sebelum "
+                             "tool selesai.")
+            raise
+        except BaseException:
+            # Error internal BUKAN cancel — jangan label "Dibatalkan user"
+            # (model menyerah salah). Pesan netral, exception tetap naik.
+            _fill_unanswered("Turn berhenti sebelum tool selesai "
+                             "(error internal).")
+            raise
+        finally:
+            # C1 (issue #56) + ronde-2 audit MAJOR-1: cancel bisa mendarat
+            # di to_thread/confirm/ask (→ CancelledError) ATAU di yield —
+            # konsumen (hooks.emit) di-cancel → generator di-aclose →
+            # GeneratorExit, BUKAN CancelledError. `finally` jalan di
+            # SEMUA exit-path (termasuk exit-path _stuck_error yang
+            # return di tengah batch) — sinkron, no-op di jalur normal
+            # (semua call sudah masuk `answered`). Tanpa ini assistant
+            # tool_calls tanpa tool message → provider 400 di request
+            # berikutnya. Permission/retry logic tidak disentuh.
+            _fill_unanswered("Dibatalkan user — turn dihentikan sebelum "
+                             "tool selesai.")
 
 
 if __name__ == "__main__":
