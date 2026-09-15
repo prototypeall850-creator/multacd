@@ -13,9 +13,6 @@ lalu menyimpan `~/.multacd/config.yaml`. Setelah itu:
 
 > /research
 > riset cepat: model reasoning kecil terbaik 2026
-
-> /personal
-> kirim briefing sekarang ke Telegram
 ```
 
 Command penting: `/help` (semua command), `/model` (ganti model),

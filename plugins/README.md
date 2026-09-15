@@ -1,8 +1,8 @@
 # Plugin multacd
 
 Extend multacd tanpa fork: taruh file Python di `~/.multacd/plugins/`,
-restart multacd, tool langsung tersedia untuk agent (TUI semua mode +
-Telegram, permission sama seperti tool bawaan).
+restart multacd, tool langsung tersedia untuk agent (semua mode,
+permission sama seperti tool bawaan).
 
 ## Cara cepat
 
@@ -12,7 +12,7 @@ cp plugins/example_plugin.py ~/.multacd/plugins/cuacaku.py
 # edit seperlunya, restart multacd
 ```
 
-Aktifkan contoh bawaan lalu cek di TUI (`/personal` atau mode apa saja):
+Aktifkan contoh bawaan lalu cek di TUI (mode apa saja):
 `tanya jam berapa` → agent pakai `waktu_sekarang`.
 
 ## Field wajib
@@ -62,7 +62,7 @@ def nama_tool(kota: str) -> dict:
 
 - Tool tidak muncul → cek nama fungsi vs `function.name`,
   pastikan `TOOL_DEFINITIONS` tidak kosong.
-- Cek warning saat startup (log TUI / `daemon logs`).
+- Cek warning saat startup (log TUI).
 - Test manual tanpa restart TUI:
 
 ```bash

@@ -88,7 +88,7 @@ SEMANTIC = {
 }
 
 # Mode → token semantik (single source, ganti di sini saja).
-MODE_TOKEN = {"code": "ok", "research": "info", "personal": "accent"}
+MODE_TOKEN = {"code": "ok", "research": "info"}
 
 
 if __name__ == "__main__":

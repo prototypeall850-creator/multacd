@@ -1,6 +1,6 @@
 # ⚡ multacd
 
-Agentic TUI untuk coding, research, dan personal automation — dalam satu terminal.
+Agentic TUI untuk coding & research — dalam satu terminal.
 Satu config BYOK untuk LLM favoritmu via provider native (ringan, Termux aman).
 
 ```
@@ -13,7 +13,7 @@ Satu config BYOK untuk LLM favoritmu via provider native (ringan, Termux aman).
   ...
 ```
 
-> Demo di atas transkrip asli (GIF menyusul). 46 tools · 121 tests hijau.
+> Demo di atas transkrip asli (GIF menyusul). 39 tools · 194 tests hijau.
 
 ## Install
 
@@ -47,7 +47,6 @@ Ikuti setup wizard (provider → API key → model), lalu:
 
 - `/code` — coding agent (baca, tulis, run, lint, test, smart git)
 - `/research` — quick & deep research ala Perplexity (BYOK search)
-- `/personal` — bot Telegram, briefing harian, cron scheduler
 - `/help` — semua command · `multacd update` — update versi
 
 ## Docs

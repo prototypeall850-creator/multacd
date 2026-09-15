@@ -30,5 +30,4 @@ nav:
   - Modes:
     - Coding Agent: modes/coding.md
     - Research Agent: modes/research.md
-    - Personal Agent: modes/personal.md
   - Plugins: plugins.md

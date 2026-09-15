@@ -58,27 +58,21 @@ def test_provider_normalized_case_insensitive():
 
 
 def test_empty_optional_keys_forgiven(tmp_path: Path):
-    """YAML `key:` kosong → None. Blok opsional dimaafkan (bot nonaktif),
-    bukan error 'dapat NoneType'. Field wajib tetap ditolak ramah."""
+    """YAML `key:` kosong → None. Blok opsional dimaafkan, bukan error
+    'dapat NoneType'. Field wajib tetap ditolak ramah."""
     from core.config import Config, ConfigError
 
-    # telegram kosong semua = bot nonaktif, lolos
-    c = Config(model="m", api_key="k", telegram={
-        "bot_token": None, "admin_id": None,
-        "admin_username": None, "allowed_users": None})
-    assert c.telegram.bot_token == "" and c.telegram.admin_id == 0
-    assert c.telegram.admin_username == "" and c.telegram.allowed_users == []
-    # `telegram:` tanpa isi + `schedules:` kosong
-    assert Config(model="m", api_key="k", telegram=None).telegram.bot_token == ""
-    assert Config(model="m", api_key="k", schedules=None).schedules == []
-    # file gaya user: admin_id di-comment → lolos, admin_id 0
+    # `provider_keys:` kosong tanpa isi = {} (dimaafkan)
+    c = Config(model="m", api_key="k", provider_keys=None)
+    assert c.provider_keys == {}
+    # File gaya lama (config pra-REMOVE masih punya blok telegram:) →
+    # key asing diabaikan forward-compat, tidak crash.
     p = tmp_path / "config.yaml"
     p.write_text("model: m\napi_key: k\ntelegram:\n"
-                 "  bot_token: 123:abc\n  admin_username: dari\n",
+                 "  bot_token: 123:abc\nschedules: []\n",
                  encoding="utf-8")
     cfg = load_config(p)
-    assert cfg.telegram.admin_id == 0
-    assert cfg.telegram.admin_username == "dari"
+    assert cfg.api_key == "k"
     # field wajib kosong tetap ditolak, pesan ramah (bukan NoneType)
     with pytest.raises(ConfigError) as exc:
         Config(model=None, api_key="k")
@@ -110,8 +104,6 @@ def test_env_ref_recursive_nested(monkeypatch):
     monkeypatch.setenv("MC_P1_T", "tok")
     cfg = config_from_dict({
         "model": "m", "api_key": "k",
-        "telegram": {"bot_token": "{env:MC_P1_T}", "allowed_users": [1]},
         "provider_keys": {"groq": "{env:MC_P1_T}"},
     })
-    assert cfg.telegram.bot_token == "tok"
     assert cfg.provider_keys["groq"] == "tok"

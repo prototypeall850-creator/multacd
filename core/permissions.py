@@ -76,23 +76,6 @@ SEARCH_TOOLS = frozenset({"web_search"})
 # ── Research (ASK: akses internet + bakar token LLM) ──
 RESEARCH_TOOLS = frozenset({"quick_research", "deep_research", "export_research"})
 
-# ── Personal (Telegram & scheduler — Phase 4) ──
-# send_telegram default AUTO (teks); eskalasi ke ASK kalau content = file.
-# get_jobs/daemon_status selalu AUTO; schedule/cancel selalu ASK
-# (efek persist, tanpa override config).
-PERSONAL_AUTO = frozenset({
-    "send_telegram",
-    "get_jobs",
-    "daemon_status",
-})
-PERSONAL_ASK = frozenset({
-    "schedule_job",
-    "cancel_job",
-    "user_manager",
-    "generate_briefing",
-})
-PERSONAL_TOOLS = PERSONAL_AUTO | PERSONAL_ASK
-
 # ── Code execution (jalankan kode → selalu konfirmasi, tanpa override config) ──
 CODE_TOOLS = frozenset({
     "run_python",
@@ -109,8 +92,8 @@ RISKY_TOOLS = frozenset({"delete_file", "git_push"})
 # merusak untuk di-auto-kan. UI tidak boleh bisa bypass kontrak ini.
 NO_SESSION_APPROVAL = CODE_TOOLS | RESEARCH_TOOLS | RISKY_TOOLS
 
-AUTO_APPROVED: frozenset[str] = READ_TOOLS | META_TOOLS | GIT_TOOLS | SEARCH_TOOLS | PERSONAL_AUTO
-ASK_REQUIRED: frozenset[str] = WRITE_TOOLS | BASH_TOOLS | WEB_TOOLS | CODE_TOOLS | RESEARCH_TOOLS | PERSONAL_ASK
+AUTO_APPROVED: frozenset[str] = READ_TOOLS | META_TOOLS | GIT_TOOLS | SEARCH_TOOLS
+ASK_REQUIRED: frozenset[str] = WRITE_TOOLS | BASH_TOOLS | WEB_TOOLS | CODE_TOOLS | RESEARCH_TOOLS
 KNOWN_TOOLS: frozenset[str] = AUTO_APPROVED | ASK_REQUIRED
 
 # ── Plugin tools (Phase 5 Step 2, mutable overlay) ──
@@ -161,10 +144,6 @@ def check_permission(tool_name: str, config: Config | None = None) -> Decision:
         return "ask"  # eksekusi kode: tanpa override config, selalu tanya
     if tool_name in RESEARCH_TOOLS:
         return "ask"  # research: internet + token, tanpa override config
-    if tool_name in PERSONAL_ASK:
-        return "ask"  # schedule/cancel: efek persist, tanpa override
-    if tool_name in PERSONAL_TOOLS:
-        return "auto"  # eskalasi file→ask ditangani PermissionChecker
     if tool_name in PLUGIN_PERMISSIONS:
         return PLUGIN_PERMISSIONS[tool_name]
     return "deny"
@@ -200,11 +179,6 @@ class PermissionChecker:
         # Eskalasi param-aware: lint + fix=true berarti tulis file.
         if tool_name == "lint_python" and (params or {}).get("fix") in (True, "true", "1"):
             return "ask"
-        # Eskalasi param-aware: send_telegram dengan content file → ask.
-        if tool_name == "send_telegram":
-            from tools.personal.send_telegram import is_file_content
-            if is_file_content((params or {}).get("content", "")):
-                return "ask"
         # #4: git_commit selalu minta approve (dialog Pakai/Edit) — commit
         # tanpa terlihat itu cara tercepat kehilangan kepercayaan user.
         if tool_name == "git_commit":
@@ -232,13 +206,12 @@ if __name__ == "__main__":
     assert check_permission("") == "deny"
 
     # Override config: user matikan semua ask → semua known jadi auto,
-    # KECUALI eksekusi kode, research, dan schedule/cancel (efek persist) —
-    # selalu ask, tanpa override.
+    # KECUALI eksekusi kode dan research — selalu ask, tanpa override.
     yolo = Config(model="m", api_key="k", auto_approve_reads=True,
                   ask_before_write=False, ask_before_bash=False, ask_before_web=False)
-    for t in sorted(KNOWN_TOOLS - CODE_TOOLS - RESEARCH_TOOLS - PERSONAL_ASK):
+    for t in sorted(KNOWN_TOOLS - CODE_TOOLS - RESEARCH_TOOLS):
         assert check_permission(t, yolo) == "auto", t
-    for t in sorted(CODE_TOOLS | RESEARCH_TOOLS | PERSONAL_ASK):
+    for t in sorted(CODE_TOOLS | RESEARCH_TOOLS):
         assert check_permission(t, yolo) == "ask", t
 
     # Override config: paranoid → read pun ikut ask.
@@ -279,13 +252,6 @@ if __name__ == "__main__":
     assert PermissionChecker().check("lint_python", {"fix": False}) == "auto"
     assert PermissionChecker().check("lint_python", {"fix": True}) == "ask"
     assert PermissionChecker().check("lint_python", {"fix": "true"}) == "ask"
-
-    # Eskalasi send_telegram: teks auto, file ask.
-    assert PermissionChecker().check("send_telegram") == "auto"
-    assert PermissionChecker().check(
-        "send_telegram", {"content": "halo"}) == "auto"
-    assert PermissionChecker().check(
-        "send_telegram", {"content": __file__}) == "ask"
 
     # #4: git_commit selalu ask (dialog Pakai/Edit) walau anggota GIT_TOOLS.
     assert check_permission("git_commit") == "auto"  # kategori tetap

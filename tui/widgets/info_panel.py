@@ -3,7 +3,6 @@
 Toggle Ctrl+I, tampil di semua mode. Isi per mode:
 - code: project + git + model + sesi
 - research: topik + round + sources + model
-- personal: daemon + jadwal (disederhanakan: status baris)
 
 Token diestimasi heuristik (chars/4) dan diberi tanda ~ — jujur:
 bukan angka resmi provider. Cost tampil '-' kalau tak terlacak.
@@ -41,9 +40,6 @@ def render_snapshot(data: dict[str, Any]) -> str:
         lines.append(f"Topik: {data.get('topic', '—')}")
         lines.append(f"Round: {data.get('round', '0/0')}")
         lines.append(f"Sources: {data.get('sources', '0 read')}")
-    elif mode == "personal":
-        lines.append(f"Daemon: {data.get('daemon', '—')}")
-        lines.append(f"Jobs: {data.get('jobs', '—')}")
     else:
         lines.append(f"Git: {data.get('git', '—')}")
     toks = data.get("tokens", 0)
@@ -97,10 +93,6 @@ if __name__ == "__main__":
                          "sources": "6 read", "tokens": 0, "messages": 1,
                          "tools": 0, "model": "m"})
     assert "Round: 2/5" in r and "Sources: 6 read" in r
-    p = render_snapshot({"mode": "personal", "project": "p", "daemon": "on",
-                         "jobs": "2", "tokens": 0, "messages": 0,
-                         "tools": 0, "model": "m"})
-    assert "Daemon: on" in p
     # TUI-R5: Usage split + status agent (data SessionState, bukan fake).
     u = render_snapshot({"mode": "code", "project": "p", "git": "g",
                          "tokens": "1.200", "prompt": 1000, "completion": 200,
@@ -109,4 +101,4 @@ if __name__ == "__main__":
     assert "In: ~1.000 · Out: ~200" in u, u
     assert "Agent: groq/x" in u, u
     assert "Session: 4 pesan · 2 tools" in u
-    print("✅ info_panel self-test OK (render 3 mode + usage/agent)")
+    print("✅ info_panel self-test OK (render 2 mode + usage/agent)")

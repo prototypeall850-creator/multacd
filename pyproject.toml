@@ -8,13 +8,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "multacd"
-version = "2.0.0b9"
-description = "Agentic TUI for coding, research, and personal automation"
+version = "2.0.0b10"
+description = "Agentic TUI for coding & research"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "multacd contributors" }]
-keywords = ["ai", "agent", "tui", "cli", "coding-agent", "telegram-bot"]
+keywords = ["ai", "agent", "tui", "cli", "coding-agent"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console :: Curses",
@@ -32,8 +32,6 @@ dependencies = [
     "httpx>=0.27.0",
     "beautifulsoup4>=4.12.0",
     "markdownify>=0.12.0",
-    "python-telegram-bot>=21.0",
-    "APScheduler>=3.10.0,<4",
 ]
 
 [project.optional-dependencies]
@@ -56,13 +54,9 @@ Changelog = "https://github.com/prototypeall850-creator/multacd/blob/main/CHANGE
 # Wheel: paket flat di root + entry main.py + soul.md bawaan.
 [tool.hatch.build.targets.wheel]
 packages = [
-    "briefing",
     "core",
-    "daemon",
     "memory",
-    "scheduler",
     "search_providers",
-    "tg",
     "tools",
     "tui",
 ]

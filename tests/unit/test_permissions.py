@@ -7,19 +7,23 @@ from core.permissions import PermissionChecker, check_permission
 
 
 def test_auto_tools():
-    for t in ("read_file", "glob", "git_status", "web_search", "get_jobs"):
+    for t in ("read_file", "glob", "git_status", "web_search"):
         assert check_permission(t) == "auto", t
 
 
 def test_ask_tools():
     for t in ("write_file", "bash", "web_fetch", "run_python",
-              "quick_research", "schedule_job", "cancel_job"):
+              "quick_research"):
         assert check_permission(t) == "ask", t
 
 
 def test_unknown_denied():
     assert check_permission("rm_rf_semua") == "deny"
     assert check_permission("") == "deny"
+    # REMOVE personal: tool lama harus deny total (bukan auto nyasar)
+    for t in ("send_telegram", "schedule_job", "cancel_job", "get_jobs",
+              "daemon_status", "user_manager", "generate_briefing"):
+        assert check_permission(t) == "deny", t
 
 
 def test_paranoid_reads_become_ask():
@@ -37,7 +41,6 @@ def test_yolo_still_asks_code_and_research():
     assert check_permission("write_file", yolo) == "auto"
     assert check_permission("run_python", yolo) == "ask"
     assert check_permission("quick_research", yolo) == "ask"
-    assert check_permission("schedule_job", yolo) == "ask"
 
 
 def test_session_approve_resets_per_instance():

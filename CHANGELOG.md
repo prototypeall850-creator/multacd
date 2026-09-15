@@ -2,6 +2,26 @@
 
 Format: Keep a Changelog. Versi: Semantic Versioning.
 
+## [2.0.0b10] - 2026-09-15
+
+Beta v2 kesepuluh — BREAKING: mode `/personal` dan seluruh stack
+Telegram diangkat permanen sesuai arahan user.
+
+- Dihapus: `tg/` (bot), `scheduler/` (cron), `daemon/` (proses
+  background + IPC), `briefing/`, `tools/personal/` (7 tool), mode
+  personal, CLI `--daemon` / `multacd daemon ...`, field config
+  `telegram:` `schedules:` `briefing:`, step Telegram di setup wizard
+  (6 → 5 langkah).
+- Dependency hilang: `python-telegram-bot`, `APScheduler` → install
+  jauh lebih ringan (Termux menang).
+- Config lama dengan blok `telegram:` tetap aman dibaca (key asing
+  diabaikan).
+- Parity opencode sekaligus masuk: P1 `{env:VAR}` di config (#57),
+  P4 slash palette inline dua kolom ala opencode (#58), plus
+  TUI-R13 look (R13: fresh screen, logo half-block, meta rata kiri).
+
+Install: `pip install "multacd==2.0.0b10"`.
+
 ## [2.0.0b9] - 2026-09-13
 
 Beta v2 kesembilan (redesign TUI, tanpa ubah agent): shell layout

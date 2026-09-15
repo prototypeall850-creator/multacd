@@ -23,10 +23,10 @@ from tui.tokens import rich_color
 
 MATCH_STYLE = "#b4befe"  # Lavender default (theme aktif via rich_color)
 
-# Kategori TUI-side (TUI-R3 §12) — dari 12 command existing, tanpa ubah core.
+# Kategori TUI-side (TUI-R3 §12) — dari 11 command existing, tanpa ubah core.
 # Header disisip sebagai item disabled (navigasi skip otomatis).
 COMMAND_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("Mode", ("/code", "/research", "/personal")),
+    ("Mode", ("/code", "/research")),
     ("Model & provider", ("/model", "/models", "/connect", "/key", "/base")),
     ("Sesi", ("/clear", "/scan", "/soul", "/help")),
 )
@@ -265,7 +265,7 @@ class SlashPalette(Vertical):
 
 
 if __name__ == "__main__":
-    assert len(match_commands("")) == len(PALETTE_COMMANDS) == 12
+    assert len(match_commands("")) == len(PALETTE_COMMANDS) == 11
     assert [c for c, _ in match_commands("mo")] == ["/model", "/models"]
     got_r = [c for c, _ in match_commands("R")]
     assert got_r and got_r[0] == "/research"  # fuzzy: prefix menang
@@ -279,9 +279,9 @@ if __name__ == "__main__":
     assert str(t) == "/model      Switch"
     assert "ctrl+o" in str(render_item("/models", "Browse", "mo"))
     assert "ctrl+" not in str(render_item("/model", "Switch", "mo"))
-    # TUI-R3: grouping — 12 command + 3 header, ranking global tetap.
+    # TUI-R3: grouping — 11 command + 3 header, ranking global tetap.
     g = grouped_matches("")
-    assert len(g) == 15, len(g)
+    assert len(g) == 14, len(g)
     assert [c for c, _ in g if is_header((c, ""))] == ["##Mode", "##Model & provider", "##Sesi"]
     assert [c for c, _ in grouped_matches("mo") if not is_header((c, ""))] == ["/model", "/models"]
     assert [c for c, _ in grouped_matches("zzz")] == []

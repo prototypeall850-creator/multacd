@@ -1,8 +1,8 @@
 """Plugin loader — extend multacd tanpa fork (Phase 5 Step 2).
 
 User taruh file Python di `~/.multacd/plugins/*.py`, multacd auto-load
-saat startup. Tool dari plugin langsung tersedia untuk agent (TUI semua
-mode + Telegram) dengan permission yang dideklarasikan plugin.
+saat startup. Tool dari plugin langsung tersedia untuk agent (semua
+mode) dengan permission yang dideklarasikan plugin.
 
 Format plugin (lihat plugins/example_plugin.py):
     PLUGIN_NAME = "kalender"

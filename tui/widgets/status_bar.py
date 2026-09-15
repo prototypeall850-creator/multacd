@@ -74,7 +74,7 @@ class TopBar(Static):
         dot_color = {"idle": "green", "thinking": "yellow", "waiting": "red"}.get(
             self._status, "green"
         )
-        mode_color = {"code": "green", "research": "blue", "personal": "magenta"}.get(
+        mode_color = {"code": "green", "research": "blue"}.get(
             self._mode, "bold"
         )
         t = Text()

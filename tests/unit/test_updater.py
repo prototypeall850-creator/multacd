@@ -60,4 +60,4 @@ def test_update_parser_routing():
     from main import parse_args
 
     assert parse_args(["update"]).cmd == "update"
-    assert parse_args(["daemon", "status"]).cmd == "daemon"
+    assert parse_args([]).cmd is None  # default = TUI
